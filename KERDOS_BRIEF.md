@@ -1,8 +1,8 @@
-# Kumbares — Project Brief (for agents)
+# Kerdos — Project Brief (for agents)
 
 ## Context
 - Event: Bank of Cyprus Fintech Hackathon 7.0, 27–29 Nov 2026, IDEA Center, Nicosia. https://bochackathon.net/en/
-- Team: "SKA" (working name, may change), 3 people. The team speaks Russian.
+- Team: "Kerdos" (same name as the product), 3 people. The team speaks Russian.
 - Track: #4 Fintech for SMEs & Entrepreneurship (also touches #3 Open Banking & Embedded Finance).
 - Prizes: €7k / €4k / €2k, plus €2k for Best use of Jinius APIs (a key target).
 - Rules: a working MVP is required. The code must be in a public repo (CC BY-SA).
@@ -13,7 +13,7 @@ Small businesses in Cyprus (cafés, tradespeople, freelancers) don't fail for la
 1. Late payments: invoices are sent over WhatsApp or paper, and clients pay 45–90 days late. Chasing them is awkward and slow.
 2. Cash-flow gaps: owners find out the account will go negative only when a payment already fails (rent, salaries, 13th salary, insurance, seasonal winter drop).
 
-## Solution: "Kumbares" (κουμπάρος, Greek for a trusted family friend)
+## Solution: "Kerdos" (κέρδος, Greek for profit, gain)
 An AI assistant for small businesses, built on Claude and integrated with Jinius (BoC's B2B platform: e-invoicing, payments, marketplace) and the BoC open banking APIs.
 
 ### MVP features
@@ -44,12 +44,12 @@ An AI assistant for small businesses, built on Claude and integrated with Jinius
 ## Demo script (2 min)
 1. The owner says or types: "Invoice Kostas €120". The invoice arrives on a second phone in the room.
 2. Time skips forward and an automatic reminder is sent.
-3. Kumbares: "In 12 days you'll be €800 negative. Get €800 against Kostas's invoice now?" Press the button, done.
+3. Kerdos: "In 12 days you'll be €800 negative. Get €800 against Kostas's invoice now?" Press the button, done.
 
 ## Plan
 - **Fri evening:** confirm API access, get sandbox keys, create a public GitHub repo, make one test payment.
 - **Sat:** invoice → Jinius, AI parsing, reminders, debt summary, forecast, financing button, UI (chat, invoice list, forecast chart), demo end to end.
-- **Sun morning:** 5 slides (problem → Kumbares → demo → bank value → scale), rehearse twice, record a backup demo video, check the public repo.
+- **Sun morning:** 5 slides (problem → Kerdos → demo → bank value → scale), rehearse twice, record a backup demo video, check the public repo.
 
 ## Principles
 - 3 working features beat 6 broken ones.
