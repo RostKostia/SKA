@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kumbares mockup</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app" id="app" data-view="chat">
+  <nav class="nav" aria-label="Main">
+    <div class="brand"><span class="mark" aria-hidden="true">κ</span><span class="wordmark">Kumbares</span></div>
+    <ul>
+      <li><button type="button" data-view="chat">Chat</button></li>
+      <li><button type="button" data-view="invoices">Invoices</button></li>
+      <li><button type="button" data-view="debtors">Debtors</button></li>
+      <li><button type="button" data-view="forecast">Forecast</button></li>
+      <li><button type="button" data-view="reminders">Reminders</button></li>
+    </ul>
+    <p class="nav-note">Mockup with sample data. Nothing here is connected to Jinius or Bank of Cyprus.</p>
+  </nav>
+
+  <header class="topbar">
+    <div class="who"><span id="biz"></span><span class="badge">Sample data</span></div>
+    <div class="top-actions">
+      <span id="today"></span>
+      <button type="button" class="btn" id="btn-skip-time">Skip time: +3 days</button>
+      <button type="button" class="btn" id="btn-client-view">Client view</button>
+    </div>
+  </header>
+
+  <main class="main" id="main">
+    <section id="view-chat" aria-label="Chat">
+      <h1 class="sr">Chat with Kumbares</h1>
+      <div id="chat-log" role="region" aria-label="Conversation with Kumbares" tabindex="0"></div>
+      <div id="announce" class="sr" aria-live="polite"></div>
+      <form id="chat-form" autocomplete="off">
+        <label for="chat-input" class="sr">Message Kumbares</label>
+        <input id="chat-input" type="text" placeholder="Invoice Kostas, 3 hours at €40">
+        <button type="submit" class="btn primary">Send</button>
+      </form>
+    </section>
+    <section id="view-invoices" aria-label="Invoices" hidden></section>
+    <section id="view-debtors" aria-label="Debtors" hidden></section>
+    <section id="view-forecast" aria-label="Cash forecast" hidden></section>
+    <section id="view-reminders" aria-label="Reminders" hidden></section>
+    <section id="view-client" aria-label="Client view" hidden></section>
+  </main>
+
+  <aside id="side-panel" class="side" aria-label="Cash outlook and actions"></aside>
+</div>
+<script src="data.js"></script>
+<script src="logic.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
