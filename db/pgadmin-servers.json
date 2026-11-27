@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Kerdos",
+      "Group": "Servers",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "kerdos",
+      "Username": "kerdos",
+      "SSLMode": "prefer"
+    }
+  }
+}

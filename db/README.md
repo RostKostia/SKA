@@ -22,6 +22,12 @@ docker compose -f db/compose.yaml --env-file db/.env exec -T db \
   psql -U kerdos -d kerdos -v ON_ERROR_STOP=1 --single-transaction < db/seed/sample.sql   # sample data (once)
 ```
 
+Optional: pgAdmin (web UI) at http://127.0.0.1:5050, no login. The `Kerdos` server is pre-registered; it asks for `KERDOS_DB_PASSWORD` on first connect.
+
+```sh
+docker compose -f db/compose.yaml --env-file db/.env --profile tools up -d pgadmin
+```
+
 Connection string for the Go backend: `postgres://kerdos:<password>@127.0.0.1:5432/kerdos?sslmode=disable`
 
 Reset to empty: `docker compose -f db/compose.yaml --env-file db/.env down -v` (deletes the data volume).
