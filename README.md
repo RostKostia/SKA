@@ -28,7 +28,7 @@ Cafés, tradespeople and freelancers rarely fail for lack of customers. They fai
 
 ```mermaid
 flowchart LR
-  owner["Business owner<br/>chat and dashboard"] --> web["Frontend<br/>Next.js, web/ (planned)"]
+  owner["Business owner<br/>chat and dashboard"] --> web["Frontend<br/>Next.js, web/"]
   client["Client's phone<br/>pay page"] --> web
   web -->|JSON API| api["Backend<br/>Go, backend/"]
   api --> db[("PostgreSQL<br/>db/")]
@@ -40,29 +40,36 @@ flowchart LR
 
 - **Database:** the business rules live in PostgreSQL views and functions: overdue status, reminders due, the forecast, financing. The API and the tests use the same rules.
 - **Backend:** a Go JSON API. Every outside service sits behind an interface with a mock, so **the demo never depends on a service being up**.
-- **Frontend:** `mockup/` is the clickable design reference today. The Next.js app follows the spec in `docs/superpowers/specs/`.
+- **Frontend:** a Next.js app in `web/` that shows what the backend returns; `mockup/` is the original design reference.
 
 ## Quick start
 
-You need Docker and Go 1.22+.
+You need Docker and Node.js 20+. Go is optional: the `api` service below runs the backend in a Go container.
 
 ```sh
-# 1. Database (create db/.env first, see db/README.md)
+# 0. Settings: create db/.env with KERDOS_DB_PASSWORD=<your password> (see db/README.md).
+#    A .env in the repo root is read by the backend too. Leave SMTP_* and KERDOS_BANK unset for the demo,
+#    or real emails go out to the sample clients' addresses.
+
+# 1. Database: start, create the schema, load the demo data
 docker compose -f db/compose.yaml --env-file db/.env up -d db
 docker compose -f db/compose.yaml --env-file db/.env run --rm migrate up
-docker compose -f db/compose.yaml --env-file db/.env exec -T db \
-  psql -U kerdos -d kerdos -v ON_ERROR_STOP=1 --single-transaction < db/seed/sample.sql
+docker compose -f db/compose.yaml --env-file db/.env exec -T db   psql -U kerdos -d kerdos -v ON_ERROR_STOP=1 --single-transaction < db/seed/sample.sql
 
-# 2. Backend (copy .env.example to .env and set KERDOS_DATABASE_URL first)
-cd backend
-go mod tidy
-go run ./cmd/kerdos-api        # http://localhost:8080/healthz
+# 2. Backend on http://localhost:8080 (first start downloads Go modules, about a minute)
+docker compose -f db/compose.yaml --env-file db/.env --profile app up -d api
+curl http://localhost:8080/healthz          # {"ok":true,"db":"ok",...}
+#    or, with Go 1.22+ installed: cd backend && go run ./cmd/kerdos-api  (needs KERDOS_DATABASE_URL)
 
-# 3. Try the demo through the API
-curl -X POST localhost:8080/api/chat -d '{"text":"Invoice Kostas €120"}'
-curl -X POST localhost:8080/api/demo/skip -d '{"days":3}'
-curl localhost:8080/api/forecast
+# 3. Frontend on http://localhost:3000
+cd web
+npm install
+npm run dev
 ```
+
+**Database created before 27 Nov?** The schema was rewritten in place (still migration 1), so an older local database must be emptied first: `docker compose -f db/compose.yaml --env-file db/.env down -v` deletes it; then run step 1 again.
+
+**The demo:** in the app's Chat, send "Invoice Kostas €120". Then skip 3 days with `curl -X POST localhost:8080/api/demo/skip -d '{"days":3}'` (Andreas gets a firm reminder), ask "Will I go negative?", press "Get €800 now" and accept. `curl -X POST localhost:8080/api/demo/reset` starts the story again.
 
 To see the design without running anything, open `mockup/index.html` in a browser.
 
@@ -79,7 +86,8 @@ No keys are needed: the bank, Jinius, email and chat parsing all have working mo
 | BoC open banking (consent, balance, transactions, matching payments to invoices) | Client written and tested against the BoC documentation's samples; not yet run against the live sandbox |
 | Jinius e-invoicing | Mock: no public API docs yet, access to be confirmed with the organisers |
 | "Pay now" through BoC, financing offers | Simulated |
-| Next.js frontend, Google sign-in, Sheets export, budgets | Not built yet |
+| Next.js frontend (`web/`): overview, chat, invoices, debtors, forecast and financing, reminders | Built on the backend API; see `web/README.md` |
+| Google sign-in, Sheets sync, budgets, the client's pay page in the frontend | Not built yet |
 
 All names, amounts and dates in the demo are sample data.
 
@@ -87,6 +95,7 @@ All names, amounts and dates in the demo are sample data.
 
 ```
 backend/    Go API: see backend/README.md
+web/        Next.js frontend: see web/README.md
 db/         PostgreSQL schema (migrations), sample data, demo test: see db/README.md
 docs/       data-model.md (data model and team decisions), superpowers/ (mockup and frontend specs)
 mockup/     clickable HTML mockup, the visual reference

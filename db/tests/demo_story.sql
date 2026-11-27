@@ -122,7 +122,7 @@ SELECT pg_temp.check(
     'exactly one automatic reminder during the skip');
 SELECT pg_temp.check(
     (SELECT (c.name, m.sequence, m.tone, m.business_date - kerdos_today())
-            = ('Andreas Electric (sample)'::text, 2, 'firm'::text, -2)
+            = ('Andreas Electric'::text, 2, 'firm'::text, -2)
      FROM outbound_messages m JOIN invoices i ON i.id = m.invoice_id JOIN counterparties c ON c.id = i.counterparty_id
      WHERE m.kind = 'overdue' AND m.business_date > kerdos_today() - 3),
     'it is Andreas, reminder 2, firm, sent on day 1 (3 days after reminder 1)');

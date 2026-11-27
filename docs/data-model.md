@@ -528,7 +528,7 @@ Where the mockup no longer matches the decisions below. These are the changes `m
 ### Demo seed
 Rebuilt for the decisions below. It keeps the demo's numbers: "In 12 days you'll be €800 negative", then "In 9 days" after one 3-day skip. This was checked with a quick simulation of these rules. Days are counted from today (day 0).
 
-- **Business:** "Nicosia Studio (sample)". Primary account available balance €1,000. Payment terms 14 days. Default policy: reminder 1 three days after the due date, then every 3 days.
+- **Business:** "Nicosia Studio". Primary account available balance €1,000. Payment terms 14 days. Default policy: reminder 1 three days after the due date, then every 3 days.
 - **Clients and their history:**
   - Elena's Bakery pays about 45 days late. One past invoice: €300, due day −106, paid day −61.
   - Andreas Electric pays about 30 days late. One past invoice: €250, due day −76, paid day −46.

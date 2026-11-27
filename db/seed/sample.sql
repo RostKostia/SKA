@@ -10,10 +10,10 @@
 --   → "In 12 days you'll be €800 negative." See db/tests/demo_story.sql for the full walk-through.
 
 INSERT INTO company (name, email, iban, vat_registered, payment_terms_days)
-VALUES ('Nicosia Studio (sample)', 'owner@example.com', 'CY00 0000 0000 0000 0000 0000 0000', false, 14);
+VALUES ('Nicosia Studio', 'owner@example.com', 'CY00 0000 0000 0000 0000 0000 0000', false, 14);
 
 INSERT INTO users (google_sub, email, name, role)
-VALUES ('sample-admin', 'owner@example.com', 'Sample Owner', 'admin');
+VALUES ('sample-admin', 'owner@example.com', 'Studio Owner', 'admin');
 
 -- Reminders: first overdue reminder 3 days after the due date, then every 3 days,
 -- polite → firm → final. No nudges before the due date in the demo (add e.g. '{3}' for one).
@@ -41,12 +41,12 @@ INSERT INTO message_templates (kind, tone, subject, body) VALUES
 -- Kostas is the client invoiced live in the demo. His email should be the second phone's
 -- address: UPDATE counterparties SET email = '<demo phone email>' WHERE name LIKE 'Kostas%';
 INSERT INTO counterparties (name, aliases, email) VALUES
-    ('Elena''s Bakery (sample)',   '{Elena,"Elena''s Bakery"}', 'elena@example.com'),
-    ('Andreas Electric (sample)',  '{Andreas,"Andreas Electric"}', 'andreas@example.com'),
-    ('Cyprus Tiles Ltd (sample)',  '{"Cyprus Tiles"}', 'accounts@example.com'),
-    ('Kostas Hadjis (sample)',     '{Kostas,Κώστας}', 'kostas@example.com'),
-    ('Studio Landlord (sample)',   '{Landlord}', 'landlord@example.com'),
-    ('Cyprus Insurance (sample)',  '{}', 'billing@example.com');
+    ('Elena''s Bakery',   '{Elena,"Elena''s Bakery"}', 'elena@example.com'),
+    ('Andreas Electric',  '{Andreas,"Andreas Electric"}', 'andreas@example.com'),
+    ('Cyprus Tiles Ltd',  '{"Cyprus Tiles"}', 'accounts@example.com'),
+    ('Kostas Hadjis',     '{Kostas,Κώστας}', 'kostas@example.com'),
+    ('Studio Landlord',   '{Landlord}', 'landlord@example.com'),
+    ('Cyprus Insurance',  '{}', 'billing@example.com');
 
 -- Receivables, numbered in issue order. The first three are paid history; their payment dates
 -- give each client's usual delay (Elena 45 days late, Andreas 30 late, Cyprus Tiles 2 days early).
@@ -58,11 +58,11 @@ DECLARE
 BEGIN
     FOR r IN
         SELECT * FROM (VALUES
-            ('Elena''s Bakery (sample)',   'Bread labels',         30000, -120, -106, -61),
-            ('Andreas Electric (sample)',  'Logo design',          25000,  -90,  -76, -46),
-            ('Cyprus Tiles Ltd (sample)',  'Brand refresh',        60000,  -20,   -6,  -8),
-            ('Andreas Electric (sample)',  'Website update',       38000,  -19,   -5, NULL),
-            ('Elena''s Bakery (sample)',   'Menu and logo design', 45000,  -10,    4, NULL)
+            ('Elena''s Bakery',   'Bread labels',         30000, -120, -106, -61),
+            ('Andreas Electric',  'Logo design',          25000,  -90,  -76, -46),
+            ('Cyprus Tiles Ltd',  'Brand refresh',        60000,  -20,   -6,  -8),
+            ('Andreas Electric',  'Website update',       38000,  -19,   -5, NULL),
+            ('Elena''s Bakery',   'Menu and logo design', 45000,  -10,    4, NULL)
         ) AS v(client, descr, amount, issue, due, paid)
         ORDER BY issue
     LOOP
@@ -83,7 +83,7 @@ BEGIN
         INSERT INTO outbound_messages (kind, mode, invoice_id, recipient, subject, body, status,
                                        business_date, scheduled_for, sent_at, provider, dedupe_key)
         SELECT 'invoice', 'automated', v_id, c.email,
-               'Invoice ' || i.number || ' from Nicosia Studio (sample)',
+               'Invoice ' || i.number || ' from Nicosia Studio',
                'Hi ' || c.name || ', here is invoice ' || i.number || ' for €' || (r.amount / 100) || '.',
                'sent', i.issue_date, i.sent_at, i.sent_at, 'mock', 'invoice:' || v_id || ':sent'
         FROM invoices i JOIN counterparties c ON c.id = i.counterparty_id WHERE i.id = v_id;
@@ -108,7 +108,7 @@ SELECT 'overdue', 'automated', i.id, 1, 'polite', p.id, c.email,
 FROM invoices i
 JOIN counterparties c ON c.id = i.counterparty_id
 CROSS JOIN reminder_policies p
-WHERE c.name = 'Andreas Electric (sample)' AND i.status = 'sent' AND p.is_default;
+WHERE c.name = 'Andreas Electric' AND i.status = 'sent' AND p.is_default;
 
 -- Payables: bills the company owes.
 INSERT INTO invoices (number, direction, counterparty_id, description, amount_cents, vat_cents,
@@ -116,14 +116,14 @@ INSERT INTO invoices (number, direction, counterparty_id, description, amount_ce
 SELECT v.number, 'payable', c.id, v.descr, v.amount, 0,
        kerdos_today() + v.issue, kerdos_today() + v.due, 'sent', 'manual', NULL
 FROM (VALUES
-    ('Studio Landlord (sample)',  'RENT-' || to_char(kerdos_today() + 4, 'YYYY-MM'), 'Studio rent', 150000, -26,  4),
-    ('Cyprus Insurance (sample)', 'INS-88213',                                       'Insurance',    60000, -18, 12)
+    ('Studio Landlord',  'RENT-' || to_char(kerdos_today() + 4, 'YYYY-MM'), 'Studio rent', 150000, -26,  4),
+    ('Cyprus Insurance', 'INS-88213',                                       'Insurance',    60000, -18, 12)
 ) AS v(supplier, number, descr, amount, issue, due)
 JOIN counterparties c ON c.name = v.supplier;
 
 -- Other known money: a client's deposit arriving on day 2.
 INSERT INTO cashflows (direction, label, category, amount_cents, next_date, recurrence, source)
-VALUES ('in', 'Maria Savva, deposit (sample)', 'Income', 30000, kerdos_today() + 2, 'once', 'demo');
+VALUES ('in', 'Maria Savva, deposit', 'Income', 30000, kerdos_today() + 2, 'once', 'demo');
 
 -- Bank: a mock BoC connection with one primary account holding €1,000.
 INSERT INTO bank_connections (provider, subscription_id, status, permissions, starts_on, expires_on)
@@ -132,7 +132,7 @@ VALUES ('mock', 'sample-subscription', 'active',
         kerdos_today(), kerdos_today() + 180);
 
 INSERT INTO bank_accounts (bank_connection_id, boc_account_id, iban, account_type, name, is_primary)
-SELECT id, 'sample-account-1', 'CY00 0000 0000 0000 0000 0000 0000', 'CURRENT', 'Business current account (sample)', true
+SELECT id, 'sample-account-1', 'CY00 0000 0000 0000 0000 0000 0000', 'CURRENT', 'Business current account', true
 FROM bank_connections WHERE subscription_id = 'sample-subscription';
 
 INSERT INTO balance_snapshots (bank_account_id, available_cents, current_cents, source)

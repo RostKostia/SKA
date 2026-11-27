@@ -133,7 +133,7 @@ func TestDemoStory(t *testing.T) {
 		t.Fatalf("chat reply: %q %v", text, card)
 	}
 	wantNumber := fmt.Sprintf("KRD-%d-0006", f.Today.Year())
-	if inv.Number != wantNumber || inv.Status != "sent" || inv.AmountCents != 12000 || inv.CounterpartyName != "Kostas Hadjis (sample)" ||
+	if inv.Number != wantNumber || inv.Status != "sent" || inv.AmountCents != 12000 || inv.CounterpartyName != "Kostas Hadjis" ||
 		inv.PaymentLinkURL == nil || !strings.HasPrefix(*inv.PaymentLinkURL, "http://front/pay/") || inv.Source != "chat" {
 		t.Fatalf("invoice: %+v", inv)
 	}
@@ -169,7 +169,7 @@ func TestDemoStory(t *testing.T) {
 			arrived += m.AmountCents
 		}
 	}
-	if len(reminders) != 1 || reminders[0].Client != "Andreas Electric (sample)" || reminders[0].Tone != "firm" || reminders[0].Sequence != 2 {
+	if len(reminders) != 1 || reminders[0].Client != "Andreas Electric" || reminders[0].Tone != "firm" || reminders[0].Sequence != 2 {
 		t.Fatalf("reminders during skip: %+v", reminders)
 	}
 	if arrived != 30000 || skip.Forecast.StartBalanceCents != 130000 {
@@ -234,7 +234,7 @@ func TestDemoStory(t *testing.T) {
 	// ---- The second phone: Kostas opens the pay page and pays.
 	var pub app.PublicInvoice
 	c.do("GET", "/api/pay/"+kostasToken, nil, 200, &pub)
-	if !pub.CanPay || pub.AmountCents != 12000 || pub.CompanyName != "Nicosia Studio (sample)" || pub.Status != "unpaid" {
+	if !pub.CanPay || pub.AmountCents != 12000 || pub.CompanyName != "Nicosia Studio" || pub.Status != "unpaid" {
 		t.Fatalf("pay page: %+v", pub)
 	}
 	c.do("POST", "/api/pay/"+kostasToken, nil, 200, &pub)
