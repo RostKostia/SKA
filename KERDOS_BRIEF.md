@@ -22,6 +22,23 @@ An AI assistant for small businesses, built on Claude and integrated with Jinius
 3. **Cash forecast.** From the account balance (BoC API) plus unpaid and upcoming invoices: "In 12 days you'll be €800 negative."
 4. **Action plan.** Remind specific clients, or get money now against an unpaid invoice (BoC overdraft or invoice financing).
 
+### Features added after the first brief
+From the Kerdos feature request. The ones the backend does not serve yet are listed in `web/README.md`.
+- **Google sign-in** (OAuth 2.0 / OpenID Connect). The backend holds all tokens; the browser only gets a session cookie. Only the `owner` role exists for now.
+- **Invoices page with two directions:** "To the company" (payable, from suppliers) and "From the company" (receivable). Search, filter, sort.
+- **Google Sheets sync and export** (CSV/XLSX, "Open in Google Sheets").
+- **Gmail reminders, manual and automated:** editable templates with placeholders such as `{client_name}`, `{invoice_number}`, `{amount}`, `{due_date}`; optional Claude draft that the owner approves; every send logged, no duplicate sends.
+- **Spending forecast by category against a monthly budget,** with an alert above 80%. The cash-gap forecast above stays the headline; this is a second view on the same data.
+
+### Status of the web app
+The Next.js app in `web/` runs on the Go backend's API: overview, chat invoicing, invoices (both directions, CSV export), debtors, the cash forecast with the financing offer, and reminders. See `web/README.md` for what is not built yet.
+
+### Architecture
+- **Frontend:** Next.js (App Router, TypeScript) in `web/`. It only displays data and proxies to the backend. Every outside service sits behind a mock in the backend, so the demo never depends on a service being up.
+- **Backend:** Go owns all logic, endpoints, integrations (BoC, Jinius, Google, Claude) and the database.
+- **Contract:** the endpoint table in `backend/README.md`; `web/lib/api/types.ts` mirrors its JSON.
+- **Data model:** `docs/data-model.md` (team-agreed). Config only through env vars; no secrets in the repo.
+
 ### Out of scope
 - Physical cash in the till: dropped, because the bank can't see it and it's niche.
 - WhatsApp channel: later. Email only for the MVP.

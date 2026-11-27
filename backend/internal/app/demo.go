@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/RostKostia/SKA/backend/internal/money"
@@ -74,7 +73,7 @@ func (a *App) SkipDays(ctx context.Context, u User, days int) (SkipResult, error
 	}
 	for _, rep := range res.Reports {
 		for _, m := range rep.Arrivals {
-			_ = say("assistant", fmt.Sprintf("%s of %s arrived.", strings.TrimSuffix(m.Label, " (sample)"), money.Format(m.AmountCents)), nil)
+			_ = say("assistant", fmt.Sprintf("%s of %s arrived.", m.Label, money.Format(m.AmountCents)), nil)
 		}
 		for _, m := range rep.BillsPaid {
 			_ = say("assistant", fmt.Sprintf("Paid %s: %s.", m.Label, money.Format(m.AmountCents)), nil)

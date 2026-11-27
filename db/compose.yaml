@@ -43,5 +43,26 @@ services:
     volumes:
       - ./pgadmin-servers.json:/pgadmin4/servers.json:ro
 
+  # The Go API without installing Go: builds and runs backend/ in a Go container.
+  api:
+    image: golang:1.23
+    profiles: ["app"]
+    depends_on:
+      db:
+        condition: service_healthy
+    working_dir: /repo/backend
+    command: ["go", "run", "./cmd/kerdos-api"]
+    environment:
+      KERDOS_DATABASE_URL: postgres://kerdos:${KERDOS_DB_PASSWORD}@db:5432/kerdos?sslmode=disable
+      KERDOS_HTTP_ADDR: ":8080"
+      KERDOS_PUBLIC_URL: http://localhost:3000
+      KERDOS_SEED_FILE: /repo/db/seed/sample.sql
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ..:/repo
+      - gomod:/go/pkg/mod
+
 volumes:
   pgdata:
+  gomod:
