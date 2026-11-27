@@ -32,7 +32,7 @@ curl localhost:8080/api/pay/<pay token>                             # the client
 curl -X POST localhost:8080/api/pay/<pay token>                     # "Pay now"
 ```
 
-On Windows PowerShell, use `curl.exe` and write the JSON body as `'{\"text\":\"Invoice Kostas €120\"}'`.
+On Windows PowerShell, see [Windows (PowerShell)](../README.md#windows-powershell) in the main README: commands with `<` need `cmd /c`, and `curl` needs `Invoke-RestMethod` or `curl.exe`.
 
 ## Settings
 
