@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { PageFallback } from "@/components/PageFallback";
 import type { Metadata } from "next";
 import { acceptOffer, sendChat } from "@/app/(app)/actions";
 import { apiErrorView } from "@/components/ErrorPanel";
@@ -57,7 +59,7 @@ function Card({ message }: { message: ChatMessage }) {
   return null;
 }
 
-export default async function ChatPage() {
+async function ChatPageContent() {
   let messages;
   try {
     messages = await getApi().listChat();
@@ -97,5 +99,13 @@ export default async function ChatPage() {
         <Button variant="primary" type="submit">Send</Button>
       </form>
     </main>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<PageFallback />}>
+      <ChatPageContent />
+    </Suspense>
   );
 }

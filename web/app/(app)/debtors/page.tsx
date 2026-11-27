@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { PageFallback } from "@/components/PageFallback";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { remindInvoice } from "@/app/(app)/actions";
@@ -8,7 +10,7 @@ import { formatMoney } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Debtors · Kerdos" };
 
-export default async function DebtorsPage() {
+async function DebtorsPageContent() {
   let debtors;
   try {
     debtors = await getApi().listDebtors();
@@ -64,5 +66,13 @@ export default async function DebtorsPage() {
         </>
       )}
     </main>
+  );
+}
+
+export default function DebtorsPage() {
+  return (
+    <Suspense fallback={<PageFallback />}>
+      <DebtorsPageContent />
+    </Suspense>
   );
 }

@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { PageFallback } from "@/components/PageFallback";
 import type { Metadata } from "next";
 import { apiErrorView } from "@/components/ErrorPanel";
 import { getApi } from "@/lib/api";
@@ -7,7 +9,7 @@ export const metadata: Metadata = { title: "Reminders · Kerdos" };
 
 const days = (n: number) => `${n} ${Math.abs(n) === 1 ? "day" : "days"}`;
 
-export default async function RemindersPage() {
+async function RemindersPageContent() {
   const api = getApi();
   let data;
   try {
@@ -88,5 +90,13 @@ export default async function RemindersPage() {
         )}
       </section>
     </main>
+  );
+}
+
+export default function RemindersPage() {
+  return (
+    <Suspense fallback={<PageFallback />}>
+      <RemindersPageContent />
+    </Suspense>
   );
 }

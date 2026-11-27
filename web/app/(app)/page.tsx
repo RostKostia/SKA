@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { PageFallback } from "@/components/PageFallback";
 import Link from "next/link";
 import { apiErrorView } from "@/components/ErrorPanel";
 import { Paper } from "@/components/ui/Paper";
@@ -8,7 +10,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 
 const OPEN: DisplayStatus[] = ["unpaid", "overdue", "partially_paid"];
 
-export default async function Overview() {
+async function OverviewContent() {
   const api = getApi();
   let data;
   try {
@@ -49,5 +51,13 @@ export default async function Overview() {
         ))}
       </ul>
     </main>
+  );
+}
+
+export default function Overview() {
+  return (
+    <Suspense fallback={<PageFallback />}>
+      <OverviewContent />
+    </Suspense>
   );
 }

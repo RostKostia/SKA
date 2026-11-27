@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { PageFallback } from "@/components/PageFallback";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { cancelInvoice, remindInvoice } from "@/app/(app)/actions";
@@ -29,7 +31,7 @@ const OPEN: DisplayStatus[] = ["unpaid", "overdue", "partially_paid"];
 
 const one = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value) ?? "";
 
-export default async function InvoicesPage({ searchParams }: { searchParams: Promise<Params> }) {
+async function InvoicesPageContent({ searchParams }: { searchParams: Promise<Params> }) {
   const params = await searchParams;
   const direction: Direction = one(params.direction) === "payable" ? "payable" : "receivable";
   const status = STATUSES.find((s) => s === one(params.status));
@@ -152,5 +154,13 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
         </div>
       )}
     </main>
+  );
+}
+
+export default function InvoicesPage(props: { searchParams: Promise<Params> }) {
+  return (
+    <Suspense fallback={<PageFallback />}>
+      <InvoicesPageContent {...props} />
+    </Suspense>
   );
 }

@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { PageFallback } from "@/components/PageFallback";
 import type { Metadata } from "next";
 import { acceptOffer, requestOffer } from "@/app/(app)/actions";
 import { apiErrorView } from "@/components/ErrorPanel";
@@ -44,7 +46,7 @@ function OfferPanel({ offer }: { offer: Offer }) {
   );
 }
 
-export default async function ForecastPage({ searchParams }: { searchParams: Promise<Params> }) {
+async function ForecastPageContent({ searchParams }: { searchParams: Promise<Params> }) {
   const offerId = one((await searchParams).offer);
   const api = getApi();
   let data;
@@ -101,5 +103,13 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
         </section>
       ) : null}
     </main>
+  );
+}
+
+export default function ForecastPage(props: { searchParams: Promise<Params> }) {
+  return (
+    <Suspense fallback={<PageFallback />}>
+      <ForecastPageContent {...props} />
+    </Suspense>
   );
 }
