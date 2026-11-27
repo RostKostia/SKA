@@ -1,0 +1,5 @@
+# Build output
+/kerdos-api
+/kerdos-api.exe
+*.test
+*.out
