@@ -1,6 +1,6 @@
 # Kerdos: data model (MVP)
 
-Status: draft with team decisions applied, 2026-11-27. No database yet. This is the logical model the backend, the API adapters and the UI should share. Types are storage-neutral and map directly to SQLite or Postgres later.
+Status: team decisions applied, 2026-11-27. **Implemented** in `db/migrations/000001_init.up.sql` (PostgreSQL), which merges this model with the first `db/` schema: one company, Google sign-in, a Gmail queue, invoices you owe, and budgets. The entity sections below are the logical model. See [In the database](#in-the-database) for the real table names and the places where the schema differs.
 
 Sources: `KERDOS_BRIEF.md`, the mockup in `mockup/`, and the BoC "APIC Portals Documentation" (Sep 2024): subscription flow, Accounts API (accounts, balance, statement) and Payments API (initiate, execute).
 
@@ -10,15 +10,40 @@ Sources: `KERDOS_BRIEF.md`, the mockup in `mockup/`, and the BoC "APIC Portals D
 
 ## Conventions
 
-- **IDs**: text, random, with a type prefix: `biz_…`, `cli_…`, `inv_…`. The prefix makes logs and chat cards readable.
+- **IDs**: `uuid` in the database. The `biz_`, `cli_` and similar prefixes below only label the entity types.
 - **Money**: integer minor units (cents) plus a currency code, in fields named `*_cents`. €40.50 is `4050`. Never floats. The mockup uses floats, so convert at the boundary.
-- **Rates**: basis points in fields named `*_bp`. 19% is `1900`.
+- **Rates**: the database stores VAT as `numeric(4,2)` percent (`19.00`). The `*_bp` fields below are the logical equivalent.
 - **Dates**: `date` for business dates (issue, due, cash-flow day), read in the business's timezone (`Europe/Nicosia`). `timestamp` (UTC) for events (sent, paid, synced).
-- **Tenancy**: every business-owned row carries `business_id`, directly or through its parent.
+- **Tenancy**: one company per database (`company` holds exactly one row), so the `business_id` fields below are not in the schema.
 - **External links**: rows that come from or go to an outside system carry `provider` (`jinius`, `boc` or `mock`) and `external_id`. Real and mock adapters write the same rows, which is the brief's rule ("mock or adapter behind the same interface"). `(provider, external_id)` is unique wherever it appears.
 - **Audit columns**: every table also has `created_at` and `updated_at`. They are left out of the tables below.
 - **Derived values** (overdue, outstanding, debtor totals, the forecast itself) are computed, not stored, unless a table below says otherwise.
-- **"Today"** is the real date plus `business.clock_offset_days`. That one field is the demo's "Skip time" button.
+- **"Today"** is `kerdos_today()`: the real local date plus `company.clock_offset_days`. That one field is the demo's "Skip time" button.
+
+---
+
+## In the database
+
+Where each entity lives in `db/migrations/000001_init.up.sql`, and where the schema differs from the sections below.
+
+| Logical entity | Table or object | Difference |
+|---|---|---|
+| Business | `company` (one row) | No tenancy. VAT is stored as a percent |
+| User | `users`, `google_tokens`, `sessions` | Google sign-in; tokens encrypted, sessions hashed |
+| Client | `counterparties` | Covers suppliers too. `avg_days_late` is the view `counterparty_payment_stats`, so it is computed rather than cached |
+| Invoice, InvoiceLine | `invoices`, `invoice_lines` | `direction` is `receivable` or `payable`, so bills you owe (rent, insurance) are invoices too. Line `net_cents` and `vat_cents` are generated columns. "Financed" is `invoices.financed_by_offer_id`. The display status is in the view `invoice_overview` |
+| Payment | `payments` | `received_on` is a business date. A trigger marks the invoice paid and cancels queued reminders |
+| PaymentInitiation | `payment_initiations` | |
+| ReminderPolicy | `reminder_policies`, `message_templates` | Timing and wording are split. `before_due_days` adds nudges before the due date |
+| Reminder, OutboundMessage | `outbound_messages` | One table is both the send log and the job queue (`kind`, `sequence`, `tone`, `business_date`, `dedupe_key`). Due reminders come from the view `reminders_due` |
+| BankConnection, BankAccount, BalanceSnapshot, BankTransaction | `bank_connections`, `bank_accounts`, `balance_snapshots`, `bank_transactions` | Snapshots carry `business_date`. Transactions link to payments through `payments.bank_transaction_id` |
+| Cashflow | `cashflows` | Use these for money that isn't a bill (deposits, salaries). Rent and insurance are payable invoices in the seed |
+| ForecastRun | `forecast_runs`, plus `forecast_events()`, `forecast_points()`, `forecast_shortfall()` | The forecast rules are implemented in SQL |
+| FinancingOffer, FinancingOfferInvoice | `financing_offers`, `financing_offer_invoices`, `accept_financing_offer()` | |
+| ChatMessage | `chat_messages` | |
+| (not in this model) | `budgets`, `audit_log`, `invoice_counters` | From the first `db/` schema |
+
+The demo seed is `db/seed/sample.sql`. `db/tests/demo_story.sql` checks every number in the demo seed section below, plus the safety rules.
 
 ---
 
@@ -512,10 +537,10 @@ Rebuilt for the decisions below. It keeps the demo's numbers: "In 12 days you'll
 - **Open invoices:**
   - Elena's Bakery, €450, sent day −10, due day 4. No reminders yet, because it isn't due. Expected payment on day 49, outside the 30-day window.
   - Andreas Electric, €380, sent day −19, due day −5 (overdue). Reminder 1 (polite) went out on day −2, and the next is due on day 1. Expected payment on day 25.
-- **Cash flows:**
-  - +€300 Maria Savva deposit on day 2.
-  - −€1,500 studio rent on day 4.
-  - −€600 insurance on day 12.
+- **Money in and out:**
+  - +€300 Maria Savva deposit on day 2 (a cash flow).
+  - −€1,500 studio rent on day 4 (a payable invoice in the database).
+  - −€600 insurance on day 12 (a payable invoice in the database).
 - **What the demo shows:**
   1. **"Invoice Kostas €120"** goes out at once, due day 14. Kostas has no history, so the forecast expects his €120 on day 14. The low point is still −€800 on day 12, because the €120 and Andreas's €380 both land after it. Hence "In 12 days you'll be €800 negative."
   2. **Skip +3 days.** The deposit arrives and the balance is €1,300. On day 1, Andreas automatically gets reminder 2, in the firm tone. Nobody else is reminded: Elena isn't due until day 4, and Kostas until day 14.
