@@ -1,4 +1,19 @@
-# Local secrets: never commit. Use .env.example as the template.
+# Secrets: real settings live in .env, which must never be committed.
+# .env.example is the template and is committed.
 .env
 .env.*
 !.env.example
+
+# IDE settings
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Dependencies, build output and logs
+node_modules/
+dist/
+build/
+*.log
