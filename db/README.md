@@ -27,10 +27,11 @@ docker compose -f db/compose.yaml --env-file db/.env exec -T db \
 **Database already set up before 28 Nov?** Run the `migrate up` command again. It adds `000002_accounts` (sign-in) and keeps your data.
 
 On Windows PowerShell, see [Windows (PowerShell)](../README.md#windows-powershell) in the main README: commands with `<` need `cmd /c`, and `curl` needs `Invoke-RestMethod` or `curl.exe`.
+On Windows PowerShell, see [Windows (PowerShell)](../project-description.md#windows-powershell) in the project description: commands with `<` need `cmd /c`, and `curl` needs `Invoke-RestMethod` or `curl.exe`.
 
 The last command walks the whole 2-minute demo and the safety rules against the sample data, prints one `ok` line per check and ends with `ALL DEMO STORY CHECKS PASSED`. It runs in a transaction that is rolled back, so it changes nothing.
 
-Before the demo, point Kostas at the second phone:
+Before the demo, point Kostas at the second phone (the full checklist is in [project-description.md](../project-description.md#the-2-minute-demo)):
 `UPDATE counterparties SET email = '<demo phone email>' WHERE name LIKE 'Kostas%';`
 
 Optional: pgAdmin (web UI) at http://127.0.0.1:5050, no login. The `Kerdos` server is pre-registered; it asks for `KERDOS_DB_PASSWORD` on first connect.
@@ -39,7 +40,7 @@ Optional: pgAdmin (web UI) at http://127.0.0.1:5050, no login. The `Kerdos` serv
 docker compose -f db/compose.yaml --env-file db/.env --profile tools up -d pgadmin
 ```
 
-Connection string for the Go backend: `postgres://kerdos:<password>@127.0.0.1:5432/kerdos?sslmode=disable`
+Connection string for the Go backend: `postgres://kerdos:<password>@127.0.0.1:<KERDOS_DB_PORT>/kerdos?sslmode=disable` (5432 by default, 5433 if you changed it).
 
 Reset to empty: `docker compose -f db/compose.yaml --env-file db/.env down -v` (deletes the data volume). Do this once if you applied the earlier version of `000001_init`, since it was rewritten before anything shipped.
 
