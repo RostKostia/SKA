@@ -25,7 +25,7 @@ Cafés, tradespeople and freelancers rarely fail for lack of customers. They fai
 1. **Invoice in one sentence.** "Invoice Kostas, 3 hours at €40" becomes an invoice. It goes out at once with a payment link, plus an email copy.
 2. **Chases payments for you.** Reminders start after the due date and get firmer each time (polite → firm → final). The owner always sees who owes what.
 3. **Warns you before you go negative.** The forecast combines the bank balance, upcoming bills, and each unpaid invoice on the day *that client* usually pays: "In 12 days you'll be €800 negative."
-4. **Offers a way out.** Remind specific clients, or get money now against your unpaid invoices (invoice financing or an overdraft). Financed invoices stop being chased.
+4. **Lets you act early.** When a gap is coming, the owner sees who owes what and can remind any client at once.
 
 Planned after the first brief, not built yet: Google sign-in, Google Sheets sync and export (only the CSV export exists so far), Gmail reminders with editable templates and an optional Claude draft, and a spending forecast by category against a monthly budget (alert above 80%). The cash-gap forecast stays the headline.
 
@@ -35,14 +35,15 @@ Planned after the first brief, not built yet: Google sign-in, Google Sheets sync
 ## Value for the bank
 
 - Invoices and payments flow through Jinius and BoC accounts.
-- The cash-gap warning is a natural moment to offer credit (overdraft or invoice financing).
+- A small fee on each invoice paid through a Kerdos payment link, like card acquiring (a working assumption, see [docs/pitch.md](docs/pitch.md#business-model)).
+- Business clients stay, because their invoicing lives in the bank's app.
 - It brings new SME clients to BoC.
 
 ## The 2-minute demo
 
 1. The owner types **"Invoice Kostas €120"**. The invoice arrives on a second phone in the room, and Kostas can pay it there.
 2. **Skip time** by 3 days. A deposit lands, and Kerdos sends Andreas a firm reminder automatically.
-3. Kerdos warns: **"In 9 days you'll be €800 negative. Get €800 now?"** One tap, and the gap closes.
+3. Kostas opens the link on the second phone and pays. The invoice turns **Paid** and its reminders stop.
 
 The commands for each step are under [Run the demo](#run-the-demo).
 
@@ -111,9 +112,9 @@ On Windows PowerShell, several of these commands need small changes: see [Window
 
 ### Run the demo
 
-In the app's Chat, send "Invoice Kostas €120". Then skip 3 days with `curl -X POST localhost:8080/api/demo/skip -d '{"days":3}'` (Andreas gets a firm reminder), ask "Will I go negative?", press "Get €800 now" and accept. `curl -X POST localhost:8080/api/demo/reset` starts the story again. Every step as an API call: [`backend/README.md`](backend/README.md#the-demo-through-the-api).
+In the app's Chat, send "Invoice Kostas €120". Then skip 3 days with `curl -X POST localhost:8080/api/demo/skip -d '{"days":3}'` (Andreas gets a firm reminder), then pay Kostas's invoice from its link ("Pay now"). `curl -X POST localhost:8080/api/demo/reset` starts the story again. Every step as an API call: [`backend/README.md`](backend/README.md#the-demo-through-the-api).
 
-**The clickable mockup on live data:** with the backend running, open http://localhost:8080/mockup/. It has the whole demo in one screen: chat, Skip time, the warning, "Get €800 now", and the client's phone view with "Pay now". Opened as a file, it only shows how to start the API.
+**The clickable mockup on live data:** with the backend running, open http://localhost:8080/mockup/. It has the whole demo in one screen: chat, Skip time, the warning, and the client's phone view with "Pay now". Opened as a file, it only shows how to start the API.
 
 ## Windows (PowerShell)
 
@@ -150,8 +151,6 @@ Invoke-RestMethod @h -Uri "$api/api/demo/reset"
 (Invoke-RestMethod "$api/api/forecast").headline                     # In 12 days you'll be €800 negative.
 (Invoke-RestMethod @h -Uri "$api/api/chat" -Body '{"text":"Invoice Kostas €120"}').messages[-1].text
 (Invoke-RestMethod @h -Uri "$api/api/demo/skip" -Body '{"days":3}').messages | Select-Object role, text
-$offer = Invoke-RestMethod @h -Uri "$api/api/financing/offers"
-(Invoke-RestMethod @h -Uri "$api/api/financing/offers/$($offer.id)/accept").forecast.headline
 $kostas = (Invoke-RestMethod "$api/api/invoices").invoices | Where-Object source -eq 'chat' | Select-Object -First 1
 Invoke-RestMethod "$api/api/pay/$($kostas.pay_token)"                 # the client's page
 Invoke-RestMethod @h -Uri "$api/api/pay/$($kostas.pay_token)"         # "Pay now"
@@ -190,8 +189,8 @@ Every integration has a mock behind the same interface. If an API blocks progres
 | **Claude** | Reads chat messages ("Invoice Kostas €120") through tool use | Works with a key. Any failure falls back to the rule-based parser | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` |
 | **Bank of Cyprus** PSD2 sandbox ([portal](https://developer.bankofcyprus.com)) | Consent, accounts, balance, statement; incoming payments matched to invoices by number | App "Kerdos" registered, app token works. The client is tested against the documentation's samples. The consent screen in the sandbox stops at the OTP step, so a live sync hasn't run yet (question for the BoC mentors). How to connect: [backend/README.md](backend/README.md#connecting-the-boc-sandbox). Use `KERDOS_BANK=mock` for the demo. The Payments API ("pay by bank") is planned for "Pay now" | `KERDOS_BANK=boc`, `BOC_*` |
 | **Jinius** (BoC B2B: e-invoicing, payments) | Sending the e-invoice with a payment link | Mock: the payment link is Kerdos's own pay page. Registration at https://b2b.integration.platform.cy is submitted and waiting for approval; then the client id and secret come from Settings → Developer. The API has `/v3/invoices` and `/v3/remittances` | `JINIUS_API_KEY` (not used yet) |
-| **Email** | Invoice copies, reminders, receipts, the owner's summary | Real over SMTP (tested with Gmail and an app password), or only logged when `SMTP_HOST` is empty. Chat and the mockup report what really happened to each email; a failed one says why and has a Retry button, and stays failed until you retry it. Nothing is emailed about a cancelled invoice, and paid or financed invoices are never chased | `SMTP_*` |
-| **"Pay now"** and financing | The client pays; the owner gets money now | Simulated: no signed BoC payment initiation yet; offers and payout are sample data (BoC has no lending API) | `KERDOS_MOCK_FINANCING_FEE_BP` |
+| **Email** | Invoice copies, reminders, receipts, the owner's summary | Real over SMTP (tested with Gmail and an app password), or only logged when `SMTP_HOST` is empty. Chat and the mockup report what really happened to each email; a failed one says why and has a Retry button, and stays failed until you retry it. Nothing is emailed about a cancelled invoice, and paid invoices are never chased | `SMTP_*` |
+| **"Pay now"** | The client pays the invoice from its link | Simulated: no signed BoC payment initiation yet | |
 
 ## Status
 
@@ -207,18 +206,19 @@ Every integration has a mock behind the same interface. If an API blocks progres
 
 All names, amounts and dates in the demo are sample data.
 
+Invoice financing ("Get €800 now") is still in the code and the API from the first plan, but it is no longer part of the product, the demo or the pitch (see [docs/pitch.md](docs/pitch.md#business-model)).
+
 ### Open before the demo
 
 - **No pay page in the web app.** The client's page `/pay/{token}` doesn't exist in `web/` yet (the backend's `GET /api/pay/{token}` is ready). Pay links point to `KERDOS_PUBLIC_URL`, which is `localhost` by default, so a second phone can't open them until the app is reachable on the network.
 - **Reminders don't stop.** The sample policy leaves `max_reminders` empty, so after the third reminder Kerdos keeps sending the "final" tone. The plan is a maximum of 3.
-- **The offer when debts are smaller than the gap.** If unpaid invoices can't cover the whole shortfall, Kerdos offers an overdraft instead of offering what the invoices can cover.
 - **The whole demo hasn't been run end to end** on the laptop yet.
 - **Real services:** BoC consent (OTP step) and Jinius access, see [Integrations](#integrations).
 - **Google Sheets, not decided:** the proposal for the demo is a service account that writes to one shared spreadsheet. Giving each user their own sheet needs Google sign-in first.
 
 ### Sunday
 
-5 slides (problem → Kerdos → demo → value for the bank → scale), rehearse twice, record a backup demo video, check that the public repo is up to date.
+The deck and the 4-minute script follow [docs/pitch.md](docs/pitch.md): rehearse twice, record a backup demo video, check that the public repo is up to date.
 
 **Principles:** 3 working features beat 6 broken ones. Keep the stack simple and easy to deploy.
 

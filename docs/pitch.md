@@ -37,7 +37,7 @@ Read at a calm pace, about 130 words a minute. Brackets are stage directions, no
 
 ### 4. Live demo (1:30), Artem
 
-[Before: `KERDOS_BANK=mock`, demo data reset, Kostas pointed at the second phone. See the checklist in the main README.]
+[Before: `KERDOS_BANK=mock`, demo data reset, Kostas pointed at the second phone. See the checklist in [project-description.md](../project-description.md#the-2-minute-demo).]
 
 1. **Chat (0:20).** [Type "Invoice Kostas €120".]
    > I just type, like I would text a friend: "Invoice Kostas, 120 euros." Claude reads it, finds Kostas in my clients and fills in the invoice.
