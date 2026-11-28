@@ -2,7 +2,7 @@
 
 Status: team decisions applied, 2026-11-27. **Implemented** in `db/migrations/000001_init.up.sql` (PostgreSQL), which merges this model with the first `db/` schema: one company, Google sign-in, a Gmail queue, invoices you owe, and budgets. The entity sections below are the logical model. See [In the database](#in-the-database) for the real table names and the places where the schema differs.
 
-Sources: `KERDOS_BRIEF.md`, the mockup in `mockup/`, and the BoC "APIC Portals Documentation" (Sep 2024): subscription flow, Accounts API (accounts, balance, statement) and Payments API (initiate, execute).
+Sources: the project brief (now in the main `README.md`), the mockup in `mockup/`, and the BoC "APIC Portals Documentation" (Sep 2024): subscription flow, Accounts API (accounts, balance, statement) and Payments API (initiate, execute).
 
 ★ marks the tables the 2-minute demo cannot run without. The rest are thin, but they are here so nothing has to be reshaped on Saturday.
 

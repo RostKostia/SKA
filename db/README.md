@@ -11,7 +11,7 @@ KERDOS_DB_PASSWORD=<choose a password>
 KERDOS_DB_PORT=5432
 ```
 
-`KERDOS_DB_PORT` is optional (default 5432). The database listens on `127.0.0.1` only.
+`KERDOS_DB_PORT` is optional (default 5432). Set it to 5433 when another PostgreSQL already holds 5432 on your computer, and use the same port in `KERDOS_DATABASE_URL`. The database listens on `127.0.0.1` only.
 
 Run from the repo root:
 
@@ -28,7 +28,7 @@ On Windows PowerShell, see [Windows (PowerShell)](../README.md#windows-powershel
 
 The last command walks the whole 2-minute demo and the safety rules against the sample data, prints one `ok` line per check and ends with `ALL DEMO STORY CHECKS PASSED`. It runs in a transaction that is rolled back, so it changes nothing.
 
-Before the demo, point Kostas at the second phone:
+Before the demo, point Kostas at the second phone (the full checklist is in the main README):
 `UPDATE counterparties SET email = '<demo phone email>' WHERE name LIKE 'Kostas%';`
 
 Optional: pgAdmin (web UI) at http://127.0.0.1:5050, no login. The `Kerdos` server is pre-registered; it asks for `KERDOS_DB_PASSWORD` on first connect.
@@ -37,7 +37,7 @@ Optional: pgAdmin (web UI) at http://127.0.0.1:5050, no login. The `Kerdos` serv
 docker compose -f db/compose.yaml --env-file db/.env --profile tools up -d pgadmin
 ```
 
-Connection string for the Go backend: `postgres://kerdos:<password>@127.0.0.1:5432/kerdos?sslmode=disable`
+Connection string for the Go backend: `postgres://kerdos:<password>@127.0.0.1:<KERDOS_DB_PORT>/kerdos?sslmode=disable` (5432 by default, 5433 if you changed it).
 
 Reset to empty: `docker compose -f db/compose.yaml --env-file db/.env down -v` (deletes the data volume). Do this once if you applied the earlier version of `000001_init`, since it was rewritten before anything shipped.
 
