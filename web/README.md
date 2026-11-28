@@ -4,7 +4,7 @@ Next.js frontend for Kerdos. It shows what the Go backend (`../backend`) returns
 
 ## Run
 
-The backend must be running first (see the repo's [README](../README.md)). Then:
+The backend must be running first (see [Quick start](../project-description.md#quick-start) in the project description). Then:
 
 ```sh
 npm install

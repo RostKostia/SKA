@@ -24,11 +24,11 @@ docker compose -f db/compose.yaml --env-file db/.env exec -T db \
   psql -U kerdos -d kerdos -v ON_ERROR_STOP=1 < db/tests/demo_story.sql                   # check the demo story
 ```
 
-On Windows PowerShell, see [Windows (PowerShell)](../README.md#windows-powershell) in the main README: commands with `<` need `cmd /c`, and `curl` needs `Invoke-RestMethod` or `curl.exe`.
+On Windows PowerShell, see [Windows (PowerShell)](../project-description.md#windows-powershell) in the project description: commands with `<` need `cmd /c`, and `curl` needs `Invoke-RestMethod` or `curl.exe`.
 
 The last command walks the whole 2-minute demo and the safety rules against the sample data, prints one `ok` line per check and ends with `ALL DEMO STORY CHECKS PASSED`. It runs in a transaction that is rolled back, so it changes nothing.
 
-Before the demo, point Kostas at the second phone (the full checklist is in the main README):
+Before the demo, point Kostas at the second phone (the full checklist is in [project-description.md](../project-description.md#the-2-minute-demo)):
 `UPDATE counterparties SET email = '<demo phone email>' WHERE name LIKE 'Kostas%';`
 
 Optional: pgAdmin (web UI) at http://127.0.0.1:5050, no login. The `Kerdos` server is pre-registered; it asks for `KERDOS_DB_PASSWORD` on first connect.
