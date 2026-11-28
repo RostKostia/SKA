@@ -226,3 +226,22 @@ tr:last-child td { border-bottom: 0; }
 @media (prefers-reduced-motion: no-preference) {
   .btn, .chip { transition: background-color 0.12s, border-color 0.12s; }
 }
+
+/* ---- API-connected additions ---- */
+.notice { margin: 16px 32px 0; padding: 10px 16px; border-radius: 10px; background: var(--mist); border: 1px solid #b7d9d4; font-weight: 600; }
+.notice.bad { background: var(--alert-bg); border-color: #e9b9a6; color: #7d2c11; }
+body.busy .btn, body.busy .chip { cursor: progress; }
+body.busy #chat-form { opacity: 0.7; }
+.tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.tab { min-height: 40px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--white); }
+.tab[aria-selected="true"] { background: var(--ink); border-color: var(--ink); color: var(--white); }
+.tab[aria-selected="true"] .muted { color: #b9d3d0; }
+.status.financed .ic { background: #e5e9f5; color: #2d3f7a; }
+.acts-cell { display: flex; gap: 8px; }
+.paper.offer ul { color: var(--ink); }
+.small { font-size: 14px; }
+.section-title { margin: 28px 0 12px; }
+.app[data-view="error"] { grid-template-columns: 232px minmax(0, 1fr); grid-template-areas: "nav top" "nav main"; }
+.app[data-view="error"] .side { display: none; }
+#view-error { display: grid; gap: 12px; align-content: start; max-width: 720px; }
+#view-error a { color: var(--teal-deep); font-weight: 600; }

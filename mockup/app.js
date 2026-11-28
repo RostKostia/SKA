@@ -1,76 +1,139 @@
+// Kerdos mockup, running on the Kerdos API (same origin: http://localhost:8080/mockup/).
+// The backend owns every number and rule; this file only fetches, renders and sends actions.
 (function () {
-  const L = window.KumbaresLogic;
-  const TODAY = new Date(2026, 10, 27);
-  const SKIP_DAYS = 3;
+  "use strict";
+
   const TONE_LABEL = { polite: "Polite", firm: "Firm", final: "Final notice" };
+  const STATUS = {
+    paid: ["paid", "✓", "Paid"],
+    financed: ["financed", "⇄", "Financed"],
+    overdue: ["overdue", "!", "Overdue"],
+    unpaid: ["unpaid", "○", "Unpaid"],
+    partially_paid: ["unpaid", "◐", "Part paid"],
+    draft: ["unpaid", "✎", "Draft"],
+    cancelled: ["unpaid", "✕", "Cancelled"],
+  };
 
-  let state = structuredClone(KUMBARES_DATA);
-  let view = "chat";
-  let clientInvoiceId = null;
-  let chat = [
-    {
-      from: "kumbares",
-      text: "Good morning. Tell me who to invoice and I'll send it through Jinius with a payment link.",
-      chips: ["Invoice Kostas €120", "Invoice Kostas, 3 hours at €40"],
-    },
-  ];
-
+  // ---------- helpers ----------
   const $ = (sel) => document.querySelector(sel);
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const eur = (n) => (n < 0 ? "−" : "") + "€" + Math.abs(Math.round(n * 100) / 100).toLocaleString("en-GB", { maximumFractionDigits: 2 });
-  const dayDate = (d) => {
-    const x = new Date(TODAY);
-    x.setDate(x.getDate() + d);
-    return x;
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const eur = (cents) => {
+    const v = Math.abs(cents) / 100;
+    return (cents < 0 ? "−" : "") + "€" + v.toLocaleString("en-GB", { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
   };
-  const shortDate = (d) => dayDate(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-  const longDate = (d) => dayDate(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-  const invNo = (inv) => "KB-" + (1040 + Number(inv.id.split("-")[1]));
+  const toDate = (s) => new Date(String(s).slice(0, 10) + "T00:00:00");
+  const shortDate = (s) => toDate(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const longDate = (s) => toDate(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-
-  function statusOf(inv) {
-    if (inv.status === "paid") return { cls: "paid", icon: "✓", label: "Paid" };
-    if (inv.status === "financed") return { cls: "financed", icon: "⇄", label: "Financed" };
-    if (state.day > inv.dueDay) return { cls: "overdue", icon: "!", label: "Overdue" };
-    return { cls: "unpaid", icon: "○", label: "Unpaid" };
-  }
-  const statusHtml = (inv) => {
-    const s = statusOf(inv);
-    return `<span class="status ${s.cls}"><span class="ic" aria-hidden="true">${s.icon}</span>${s.label}</span>`;
+  const statusHtml = (key) => {
+    const [cls, icon, label] = STATUS[key] || STATUS.unpaid;
+    return `<span class="status ${cls}"><span class="ic" aria-hidden="true">${icon}</span>${label}</span>`;
   };
 
-  function toneMessage(inv, tone, day = state.day) {
-    const age = day - inv.sentDay;
-    const who = inv.client;
-    if (tone === "polite") return `Hi ${who}, a friendly reminder that invoice ${invNo(inv)} for ${eur(inv.amount)} is still open. You can pay in one tap with the link below.`;
-    if (tone === "firm") return `Hi ${who}, invoice ${invNo(inv)} (${eur(inv.amount)}) is now ${plural(age, "day")} old and still unpaid. Please pay it today using the link below.`;
-    return `Final notice: invoice ${invNo(inv)} (${eur(inv.amount)}) is ${plural(age, "day")} old. Please pay today or contact us to agree a plan.`;
-  }
-
-  /* ---------- derived data ---------- */
-  const unpaid = () => state.invoices.filter((i) => i.status === "unpaid");
-  const currentShortfall = () => L.shortfall(L.forecast(state));
-  function outflowOn(rel) {
-    return state.outflows.find((e) => e.day === state.day + rel);
-  }
-  function owedByClient() {
-    const map = new Map();
-    for (const inv of unpaid()) {
-      const row = map.get(inv.client) || { client: inv.client, total: 0, oldest: 0, invoices: [] };
-      row.total += inv.amount;
-      row.oldest = Math.max(row.oldest, state.day - inv.sentDay);
-      row.invoices.push(inv);
-      map.set(inv.client, row);
+  async function api(method, path, body) {
+    const opts = { method, headers: {} };
+    if (body !== undefined) {
+      opts.headers["Content-Type"] = "application/json; charset=utf-8";
+      opts.body = JSON.stringify(body);
     }
-    return [...map.values()].sort((a, b) => b.total - a.total);
-  }
-  function lastTone(invoices) {
-    const all = invoices.flatMap((i) => i.reminders).sort((a, b) => a.day - b.day);
-    return all.length ? TONE_LABEL[all[all.length - 1].tone] : "None yet";
+    const res = await fetch(path, opts);
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (_) {
+      /* empty body */
+    }
+    if (!res.ok) {
+      const err = new Error((data && data.error && data.error.message) || `${res.status} ${res.statusText}`);
+      err.status = res.status;
+      err.code = data && data.error && data.error.code;
+      throw err;
+    }
+    return data;
   }
 
-  /* ---------- chart ---------- */
-  function renderForecastChart(points, info, container, opts = {}) {
+  // ---------- state (all of it from the API) ----------
+  const s = { dash: null, chat: [], invoices: [], messages: [], settings: null, offers: {}, pay: null, payError: null };
+  let view = "chat";
+  let invTab = "receivable";
+  let clientToken = null;
+  let busy = false;
+  let fatal = null;
+  let noticeTimer = null;
+  let lastAnnounced = null;
+
+  const cardOf = (m) => (m && m.card && typeof m.card === "object" ? m.card : null);
+  const messageById = (id) => s.messages.find((m) => m.id === id);
+
+  async function load() {
+    const [dash, chat, inv, msgs, settings] = await Promise.all([
+      api("GET", "/api/dashboard"),
+      api("GET", "/api/chat?limit=200"),
+      api("GET", "/api/invoices"),
+      api("GET", "/api/messages?limit=200"),
+      api("GET", "/api/reminders/settings"),
+    ]);
+    s.dash = dash;
+    s.chat = chat.messages || [];
+    s.invoices = inv.invoices || [];
+    s.messages = msgs.messages || [];
+    s.settings = settings;
+    const offerIds = [...new Set(s.chat.map(cardOf).filter((c) => c && c.type === "offer").map((c) => c.offer_id))];
+    await Promise.all(
+      offerIds.map(async (id) => {
+        try {
+          s.offers[id] = await api("GET", "/api/financing/offers/" + id);
+        } catch (_) {
+          delete s.offers[id];
+        }
+      })
+    );
+    if (view === "client") await loadClient();
+  }
+
+  async function refresh() {
+    try {
+      await load();
+      fatal = null;
+    } catch (e) {
+      fatal = e;
+    }
+    render();
+  }
+
+  function notify(text, bad) {
+    const n = $("#notice");
+    n.textContent = text;
+    n.className = "notice" + (bad ? " bad" : "");
+    n.hidden = false;
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => (n.hidden = true), 6000);
+  }
+
+  async function act(fn) {
+    if (busy) return;
+    busy = true;
+    document.body.classList.add("busy");
+    try {
+      await fn();
+    } catch (e) {
+      if (e.status >= 500 || !e.status) fatal = e;
+      else notify(e.message.charAt(0).toUpperCase() + e.message.slice(1) + ".", true);
+    } finally {
+      busy = false;
+      document.body.classList.remove("busy");
+    }
+    await refresh();
+  }
+
+  // ---------- chart (inline SVG, values from the API) ----------
+  function renderForecastChart(forecast, container, opts = {}) {
+    const points = (forecast.points || []).map((p) => ({ day: p.day, date: p.date, balance: p.balance_cents / 100 }));
+    if (points.length < 2) {
+      container.innerHTML = '<p class="muted">No forecast yet.</p>';
+      return;
+    }
+    const sf = forecast.shortfall;
     const W = opts.width || 340;
     const H = opts.height || 190;
     const m = { l: 46, r: 12, t: 14, b: 28 };
@@ -87,40 +150,40 @@
     for (let i = 1; i < points.length; i++) line += ` H${x(i)} V${y(points[i].balance)}`;
     const area = `${line} V${y0} H${x(0)} Z`;
 
-    const desc = info
-      ? `Projected balance over the next ${points.length - 1} days. It starts at ${eur(points[0].balance)}, first goes below zero on ${shortDate(state.day + info.firstDay)}, and reaches its lowest point of ${eur(-info.amount)} on ${shortDate(state.day + info.lowestDay)}.`
-      : `Projected balance over the next ${points.length - 1} days. It starts at ${eur(points[0].balance)} and stays above zero.`;
+    const last = points.length - 1;
+    const desc = sf
+      ? `Projected balance over the next ${last} days. It starts at ${eur(points[0].balance * 100)}, first goes below zero on ${shortDate(points[sf.first_negative_day].date)}, and reaches its lowest point of ${eur(sf.lowest_balance_cents)} on ${shortDate(points[sf.lowest_day].date)}.`
+      : `Projected balance over the next ${last} days. It starts at ${eur(points[0].balance * 100)} and stays at or above zero.`;
 
     let marks = "";
-    if (opts.events) {
-      opts.events.forEach((e, i) => {
-        const p = points[e.rel];
-        marks += `<circle cx="${x(e.rel)}" cy="${y(p.balance)}" r="11" fill="${e.kind === "in" ? "#0f766e" : "#0f3a40"}" stroke="#fff" stroke-width="2"/><text class="ev" x="${x(e.rel)}" y="${y(p.balance) + 4}" text-anchor="middle">${i + 1}</text>`;
-      });
-    }
+    (opts.events || []).forEach((e, i) => {
+      const p = points[e.day];
+      if (!p) return;
+      marks += `<circle cx="${x(e.day)}" cy="${y(p.balance)}" r="11" fill="${e.amount_cents > 0 ? "#0f766e" : "#0f3a40"}" stroke="#fff" stroke-width="2"/><text class="ev" x="${x(e.day)}" y="${y(p.balance) + 4}" text-anchor="middle">${i + 1}</text>`;
+    });
     let lowDot = "";
     let lowLabel = "";
-    if (info) {
-      const lx = x(info.lowestDay);
-      const ly = y(-info.amount);
+    if (sf) {
+      const lx = x(sf.lowest_day);
+      const ly = y(sf.lowest_balance_cents / 100);
       const anchor = lx > W * 0.55 ? "end" : "start";
-      const tx = anchor === "end" ? lx - 8 : lx + 8;
       lowDot = `<circle cx="${lx}" cy="${ly}" r="5" fill="#b3401b"/>`;
-      lowLabel = `<text class="lbl-bad" x="${tx}" y="${ly - 8}" text-anchor="${anchor}">Day ${info.lowestDay}: ${eur(-info.amount)}</text>`;
+      lowLabel = `<text class="lbl-bad" x="${anchor === "end" ? lx - 8 : lx + 8}" y="${ly - 8}" text-anchor="${anchor}">Day ${sf.lowest_day}: ${eur(sf.lowest_balance_cents)}</text>`;
     }
     const ticks = [0, 10, 20, 30]
-      .filter((d) => d < points.length)
-      .map((d) => `<text x="${x(d)}" y="${H - 6}" text-anchor="${d === 0 ? "start" : d === points.length - 1 ? "end" : "middle"}">${d === 0 ? "Today" : shortDate(state.day + d)}</text>`)
+      .filter((d) => d <= last)
+      .map((d) => `<text x="${x(d)}" y="${H - 6}" text-anchor="${d === 0 ? "start" : d === last ? "end" : "middle"}">${d === 0 ? "Today" : shortDate(points[d].date)}</text>`)
       .join("");
-    const yTicks = [...new Set([Math.max(...bal) > 0 ? Math.max(...bal) : 0, 0])]
-      .map((v) => `<text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${eur(Math.round(v / 100) * 100)}</text>`)
+    const top = Math.max(...bal);
+    const yTicks = [...new Set([top > 0 ? top : 0, 0])]
+      .map((v) => `<text x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${eur(Math.round(v / 100) * 10000)}</text>`)
       .join("");
 
     container.innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(desc)}">
       <defs>
         <pattern id="hatch-${id}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#fbede7"/><line x1="0" y1="0" x2="0" y2="6" stroke="#b3401b" stroke-width="2"/></pattern>
         <clipPath id="above-${id}"><rect x="0" y="0" width="${W}" height="${y0}"/></clipPath>
-        <clipPath id="below-${id}"><rect x="0" y="${y0}" width="${W}" height="${H - y0}"/></clipPath>
+        <clipPath id="below-${id}"><rect x="0" y="${y0}" width="${W}" height="${Math.max(H - y0, 0)}"/></clipPath>
       </defs>
       <path d="${area}" fill="#e1f0ee" clip-path="url(#above-${id})"/>
       <path d="${area}" fill="url(#hatch-${id})" clip-path="url(#below-${id})"/>
@@ -130,270 +193,260 @@
     </svg>`;
   }
 
-  /* ---------- views ---------- */
-  let lastAnnounced = null;
-  function renderChat() {
-    const log = $("#chat-log");
-    log.innerHTML = chat.map(msgHtml).join("");
-    log.scrollTop = log.scrollHeight;
-    const last = chat[chat.length - 1];
-    if (last !== lastAnnounced) {
-      lastAnnounced = last;
-      const c = last.card;
-      const extra = c && c.type === "warning" ? ` In ${plural(c.lowestDay, "day")} you'll be ${eur(c.amount)} negative.` : c && c.type === "invoice" ? " Invoice sent." : "";
-      $("#announce").textContent = `${last.from === "me" ? "You: " : ""}${last.text}${extra}`;
-    }
-  }
-
-  function cardHtml(c) {
-    if (c.type === "invoice") {
-      const inv = state.invoices.find((i) => i.id === c.id);
-      return `<div class="paper"><div class="row"><h3>${invNo(inv)} · ${esc(inv.client)}</h3><span class="tag">Sample</span></div>
-        <div class="amount">${eur(inv.amount)}</div><p>${esc(inv.description)}</p>
-        <ul><li>✓ Sent via Jinius with a payment link</li><li>✓ Copy sent by email</li><li>Due ${longDate(inv.dueDay)}</li></ul></div>`;
-    }
-    if (c.type === "reminder") {
-      const inv = state.invoices.find((i) => i.id === c.id);
-      return `<div class="paper"><div class="row"><h3>Reminder to ${esc(inv.client)}</h3><span class="tag">${TONE_LABEL[c.tone]} · email</span></div><p class="quote">${esc(c.message)}</p></div>`;
-    }
-    if (c.type === "warning") {
-      const where = c.firstOut ? ` The first dip comes on ${shortDate(c.firstDate)}, when ${esc(c.firstOut.label.toLowerCase())} (${eur(c.firstOut.amount)}) goes out.` : "";
-      const actions = state.financed
-        ? `<p class="done">Done. The advance is in your account.</p>`
-        : `<div class="acts"><button type="button" class="btn primary" data-act="finance" data-amount="${c.amount}">Get ${eur(c.amount)} now</button><button type="button" class="btn" data-act="remind-all">Remind all clients first</button></div>`;
-      return `<div class="alertbox"><strong>In ${plural(c.lowestDay, "day")} you'll be ${eur(c.amount)} negative.</strong>
-        <p>That's based on your balance and the bills coming up.${where} Your unpaid invoices total ${eur(c.unpaidTotal)}, so I can advance ${eur(c.amount)} against them.</p>${actions}</div>`;
-    }
-    if (c.type === "financed") {
-      return `<div class="okbox"><h3>${eur(c.amount)} advanced against your unpaid invoices</h3><p class="muted">Simulated. A real offer would show the fee and repayment terms before you accept.</p></div>`;
+  // ---------- chat ----------
+  function cardHtml(m) {
+    const c = cardOf(m);
+    if (!c) return "";
+    const inv = m.invoice;
+    switch (c.type) {
+      case "invoice": {
+        if (!inv) return "";
+        const simulated = inv.payment_link_url && inv.payment_link_url.includes("/pay/");
+        return `<div class="paper"><div class="row"><h3>${esc(inv.number)} · ${esc(inv.counterparty_name)}</h3>${statusHtml(inv.display_status)}</div>
+          <div class="amount">${eur(inv.amount_cents)}</div><p>${esc(inv.description)}</p>
+          <ul><li>✓ Sent via Jinius with a payment link${simulated ? " (simulated)" : ""}</li><li>✓ Copy sent by email</li><li>Due ${longDate(inv.due_date)}</li></ul>
+          ${inv.pay_token ? `<div><button type="button" class="btn small" data-act="client" data-token="${esc(inv.pay_token)}">Open the client's page</button></div>` : ""}</div>`;
+      }
+      case "reminder": {
+        const msg = messageById(c.message_id);
+        const who = inv ? inv.counterparty_name : "the client";
+        const label = c.tone ? TONE_LABEL[c.tone] : "Friendly nudge";
+        return `<div class="paper"><div class="row"><h3>Reminder to ${esc(who)}</h3><span class="tag">${esc(label)} · email${msg ? " · " + esc(msg.status) : ""}</span></div>
+          ${msg ? `<p class="quote">${esc(msg.body)}</p>` : ""}</div>`;
+      }
+      case "warning": {
+        const still = s.dash && s.dash.forecast && s.dash.forecast.shortfall;
+        const acts = still
+          ? `<div class="acts"><button type="button" class="btn primary" data-act="offer">Get ${eur(still.shortfall_cents)} now</button><button type="button" class="btn" data-act="remind-all">Remind all clients first</button></div>`
+          : `<p class="done">Covered: no shortfall in the next 30 days now.</p>`;
+        return `<div class="alertbox"><strong>In ${plural(c.lowest_day, "day")} you'll be ${eur(c.shortfall_cents)} negative.</strong>${acts}</div>`;
+      }
+      case "offer": {
+        const o = s.offers[c.offer_id];
+        if (!o) return "";
+        const backing = o.invoices.length
+          ? `<ul>${o.invoices.map((i) => `<li>${esc(i.number)} · ${esc(i.client)} · ${eur(i.outstanding_cents)}</li>`).join("")}</ul>`
+          : "<p>As an overdraft.</p>";
+        const state =
+          o.status === "offered"
+            ? `<button type="button" class="btn primary" data-act="accept" data-id="${esc(o.id)}">Accept ${eur(o.amount_cents)}</button>`
+            : `<p class="done">${o.status === "disbursed" ? "Accepted. The money is in your account (simulated)." : "This offer is " + esc(o.status) + ". Ask again for a new one."}</p>`;
+        return `<div class="paper offer"><div class="row"><h3>${eur(o.amount_cents)} ${o.product === "overdraft" ? "overdraft" : "against your unpaid invoices"}</h3><span class="tag">Sample fee ${eur(o.fee_cents)}</span></div>
+          ${backing}<p class="muted small">${esc(o.note)}</p>${state}</div>`;
+      }
+      case "financed":
+        return `<div class="okbox"><h3>${eur(c.amount_cents)} advanced against your unpaid invoices</h3><p class="muted">Simulated. A real offer shows the bank's fee and repayment terms before you accept.</p></div>`;
+      case "paid":
+        return inv ? `<div class="okbox"><h3>${esc(inv.number)} paid: ${eur(inv.amount_cents)}</h3></div>` : "";
+      case "suggestions":
+        return `<div class="chips">${(c.chips || []).map((t) => `<button type="button" class="chip" data-act="fill" data-text="${esc(t)}">${esc(t)}</button>`).join("")}</div>`;
     }
     return "";
   }
 
   function msgHtml(m) {
-    if (m.from === "system") return `<div class="sys">${esc(m.text)}</div>`;
-    if (m.from === "me") return `<div class="msg me"><p>${esc(m.text)}</p></div>`;
-    const chips = (m.chips || []).map((t) => `<button type="button" class="chip" data-act="fill" data-text="${esc(t)}">${esc(t)}</button>`).join("");
-    return `<div class="msg"><span class="avatar" aria-hidden="true">κ</span><div class="body"><p>${esc(m.text)}</p>${m.card ? cardHtml(m.card) : ""}${chips ? `<div class="chips">${chips}</div>` : ""}</div></div>`;
+    if (m.role === "system") return `<div class="sys">${esc(m.text)}</div>`;
+    if (m.role === "owner") return `<div class="msg me"><p>${esc(m.text)}</p></div>`;
+    return `<div class="msg"><span class="avatar" aria-hidden="true">κ</span><div class="body"><p>${esc(m.text)}</p>${cardHtml(m)}</div></div>`;
+  }
+
+  function renderChat() {
+    const log = $("#chat-log");
+    const welcome = s.chat.length
+      ? ""
+      : msgHtml({ role: "assistant", text: "Tell me who to invoice and I'll send it with a payment link.", card: { type: "suggestions", chips: ["Invoice Kostas €120", "Invoice Kostas, 3 hours at €40"] } });
+    log.innerHTML = welcome + s.chat.map(msgHtml).join("");
+    log.scrollTop = log.scrollHeight;
+    const last = s.chat[s.chat.length - 1];
+    if (last && last.id !== lastAnnounced) {
+      lastAnnounced = last.id;
+      $("#announce").textContent = (last.role === "owner" ? "You: " : "") + last.text;
+    }
+  }
+
+  // ---------- views ----------
+  function remindButton(inv, label) {
+    const open = inv.direction === "receivable" && inv.status === "sent" && inv.outstanding_cents > 0 && !inv.is_financed;
+    return open ? `<button type="button" class="btn small" data-act="remind" data-id="${esc(inv.id)}" aria-label="Remind ${esc(inv.counterparty_name)} now">${label || "Remind now"}</button>` : "";
   }
 
   function renderInvoices() {
-    const rows = state.invoices
-      .slice()
-      .sort((a, b) => b.sentDay - a.sentDay)
+    const sentCount = (id) => s.messages.filter((m) => m.invoice_id === id && (m.kind === "overdue" || m.kind === "upcoming") && m.status === "sent").length;
+    const list = s.invoices.filter((i) => i.direction === invTab);
+    const rows = list
       .map((inv) => {
-        const last = inv.reminders.at(-1);
-        const act = inv.status === "unpaid" ? `<button type="button" class="btn small" data-act="remind" data-id="${inv.id}" aria-label="Remind ${esc(inv.client)} now">Remind now</button>` : "";
-        return `<tr><td>${invNo(inv)}</td><td class="wrap"><strong>${esc(inv.client)}</strong><br><span class="muted">${esc(inv.description)}</span></td>
-          <td class="r num">${eur(inv.amount)}</td><td>${shortDate(inv.sentDay)}</td><td>${shortDate(inv.dueDay)}</td><td>${statusHtml(inv)}</td>
-          <td>${inv.reminders.length ? `${inv.reminders.length} sent, last ${TONE_LABEL[last.tone].toLowerCase()}` : "None"}</td><td>${act}</td></tr>`;
+        const n = sentCount(inv.id);
+        const client = inv.direction === "receivable" && inv.pay_token && inv.status !== "draft"
+          ? `<button type="button" class="btn small" data-act="client" data-token="${esc(inv.pay_token)}">Client view</button>` : "";
+        return `<tr><td>${esc(inv.number)}</td><td class="wrap"><strong>${esc(inv.counterparty_name)}</strong><br><span class="muted">${esc(inv.description)}</span></td>
+          <td class="r num">${eur(inv.amount_cents)}</td><td class="r num">${inv.outstanding_cents ? eur(inv.outstanding_cents) : "—"}</td>
+          <td>${shortDate(inv.issue_date)}</td><td>${shortDate(inv.due_date)}</td><td>${statusHtml(inv.display_status)}</td>
+          <td>${inv.direction === "receivable" ? (n ? plural(n, "reminder") : "None") : ""}</td><td><div class="acts-cell">${remindButton(inv)}${client}</div></td></tr>`;
       })
       .join("");
-    $("#view-invoices").innerHTML = `<div class="page-head"><h1>Invoices</h1><p class="muted">Every invoice sent through Jinius, newest first.</p></div>
-      <table><thead><tr><th scope="col">No.</th><th scope="col">Client</th><th scope="col" class="r">Amount</th><th scope="col">Sent</th><th scope="col">Due</th><th scope="col">Status</th><th scope="col">Reminders</th><th scope="col"><span class="sr">Action</span></th></tr></thead><tbody>${rows}</tbody></table>`;
+    const tab = (dir, label) => `<button type="button" role="tab" class="tab" aria-selected="${invTab === dir}" data-act="tab" data-dir="${dir}">${label} <span class="muted">(${s.invoices.filter((i) => i.direction === dir).length})</span></button>`;
+    $("#view-invoices").innerHTML = `<div class="page-head"><h1>Invoices</h1><p class="muted">Every invoice, newest first. Status, amounts and reminders come from the backend.</p></div>
+      <div class="tabs" role="tablist">${tab("receivable", "From the company")}${tab("payable", "To the company")}</div>
+      <table><thead><tr><th scope="col">No.</th><th scope="col">${invTab === "receivable" ? "Client" : "Supplier"}</th><th scope="col" class="r">Amount</th><th scope="col" class="r">Still owed</th>
+      <th scope="col">Issued</th><th scope="col">Due</th><th scope="col">Status</th><th scope="col">${invTab === "receivable" ? "Reminders" : ""}</th><th scope="col"><span class="sr">Actions</span></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="9" class="muted">No invoices here yet.</td></tr>`}</tbody></table>`;
   }
 
   function renderDebtors() {
-    const list = owedByClient();
-    const total = list.reduce((s, r) => s + r.total, 0);
+    const list = s.dash.debtors || [];
     const cards = list
-      .map(
-        (r) => `<div class="debtor"><div><h3>${esc(r.client)}</h3></div><div class="big">${eur(r.total)}</div>
-        <button type="button" class="btn small" data-act="remind" data-id="${r.invoices[0].id}" aria-label="Remind ${esc(r.client)} now">Remind now</button>
-        <div class="meta">Oldest invoice ${plural(r.oldest, "day")} old · Reminders sent: ${r.invoices.reduce((s, i) => s + i.reminders.length, 0)} · Last tone: ${lastTone(r.invoices)}</div></div>`
-      )
+      .map((d) => `<div class="debtor"><div><h3>${esc(d.name)}</h3></div><div class="big">${eur(d.outstanding_cents)}</div>
+        <button type="button" class="btn small" data-act="remind" data-id="${esc(d.oldest_invoice_id)}" aria-label="Remind ${esc(d.name)} now">Remind now</button>
+        <div class="meta">${plural(d.open_invoices, "open invoice")} · oldest ${plural(d.oldest_age_days, "day")} old${d.max_days_overdue ? ` · ${plural(d.max_days_overdue, "day")} overdue` : ""} · reminders sent: ${d.reminders_sent} · last tone: ${d.last_tone ? TONE_LABEL[d.last_tone] : "none yet"}</div></div>`)
       .join("");
-    $("#view-debtors").innerHTML = `<div class="page-head"><h1>${list.length ? `${eur(total)} owed by ${plural(list.length, "client")}` : "Nobody owes you anything"}</h1><p class="muted">Sorted by what you're owed.</p></div>
-      <div class="debtor-list">${cards || '<p>All invoices are paid or financed. New invoices will show up here.</p>'}</div>`;
-  }
-
-  function renderReminders() {
-    const sample = { id: "inv-3", client: "Kostas", amount: 120, sentDay: state.day - 9 };
-    const steps = [
-      ["polite", "Reminder 1", "A friendly nudge with the payment link."],
-      ["firm", "Reminder 2", "States how many days the invoice is open and asks for payment today."],
-      ["final", "Reminder 3 and after", "A final notice. Stays at this level and asks for a call or a plan."],
-    ]
-      .map(
-        ([tone, name, what], i) => `<li><span class="n" aria-hidden="true">${i + 1}</span><div><h3>${name}: ${TONE_LABEL[tone].toLowerCase()}</h3><p class="muted">${what}</p><p class="sample">${esc(toneMessage(sample, tone))}</p></div></li>`
-      )
-      .join("");
-    $("#view-reminders").innerHTML = `<div class="page-head"><h1>Reminders</h1><p class="muted">Kumbares chases unpaid invoices for you, so you don't have to. Reminders go by email in this version.</p>
-      <div class="interval"><span class="muted">Remind every</span><strong class="num">${state.reminderEveryDays} days</strong></div></div><ol class="steps">${steps}</ol>`;
-  }
-
-  function eventsList() {
-    const evs = [
-      ...state.inflows.map((e) => ({ ...e, kind: "in" })),
-      ...state.outflows.map((e) => ({ ...e, kind: "out" })),
-    ]
-      .filter((e) => e.day > state.day && e.day <= state.day + 30)
-      .sort((a, b) => a.day - b.day)
-      .map((e) => ({ ...e, rel: e.day - state.day }));
-    return evs;
+    $("#view-debtors").innerHTML = `<div class="page-head"><h1>${list.length ? `${eur(s.dash.owed_cents)} owed by ${plural(list.length, "client")}` : "Nobody owes you anything"}</h1>
+      <p class="muted">Sorted by what you're owed. Financed invoices are left out: Kerdos doesn't chase them.</p></div>
+      <div class="debtor-list">${cards || "<p>All invoices are paid or financed. New invoices will show up here.</p>"}</div>`;
   }
 
   function renderForecastView() {
-    const points = L.forecast(state);
-    const info = L.shortfall(points);
-    const evs = eventsList();
-    const items = evs
-      .map((e, i) => `<li class="${e.kind}"><span class="dot" aria-hidden="true">${i + 1}</span><span><strong>${shortDate(e.day)}</strong> · ${esc(e.label)} · <span class="num">${e.kind === "in" ? "+" : "−"}${eur(e.amount)}</span></span></li>`)
+    const f = s.dash.forecast;
+    const events = f.events || [];
+    const items = events
+      .map((e, i) => `<li class="${e.amount_cents > 0 ? "in" : "out"}"><span class="dot" aria-hidden="true">${i + 1}</span><span><strong>${shortDate(e.date)}</strong> · ${esc(e.label)} · <span class="num">${e.amount_cents > 0 ? "+" : "−"}${eur(Math.abs(e.amount_cents))}</span></span></li>`)
       .join("");
-    $("#view-forecast").innerHTML = `<div class="forecast-wrap"><div class="page-head"><h1>${info ? `In ${plural(info.lowestDay, "day")} you'll be ${eur(info.amount)} negative` : "No shortfall in the next 30 days"}</h1>
-      <p class="muted">Projection from your account balance (${eur(state.balance)}, sample) and known payments in and out. Unpaid invoices aren't counted until they're paid, because these clients usually pay late.</p></div>
-      <div id="chart-big"></div><ol class="events" aria-label="Payments in and out">${items}</ol></div>`;
-    renderForecastChart(points, info, $("#chart-big"), { width: 800, height: 320, id: "big", events: evs });
+    const sf = f.shortfall;
+    $("#view-forecast").innerHTML = `<div class="forecast-wrap"><div class="page-head"><h1>${esc(f.headline)}</h1>
+      <p class="muted">${esc(f.method || "")} Balance today: ${eur(f.start_balance_cents)}.</p></div>
+      <div id="chart-big"></div><ol class="events" aria-label="Payments in and out">${items}</ol>
+      ${sf ? `<div><button type="button" class="btn primary" data-act="offer">Get ${eur(sf.shortfall_cents)} now</button></div>` : ""}</div>`;
+    renderForecastChart(f, $("#chart-big"), { width: 800, height: 320, id: "big", events });
+  }
+
+  function renderReminders() {
+    const st = s.settings;
+    if (!st) return;
+    const order = ["polite", "firm", "final"];
+    const tpl = (kind, tone) => (st.templates || []).find((t) => t.kind === kind && (t.tone || "") === (tone || ""));
+    const steps = (st.tone_steps || order)
+      .map((tone, i, arr) => {
+        const t = tpl("overdue", tone);
+        const when = i === 0 ? `${plural(st.first_after_due_days, "day")} after the due date` : `${plural(st.every_days, "day")} after the previous one`;
+        const name = i === arr.length - 1 ? `Reminder ${i + 1} and after` : `Reminder ${i + 1}`;
+        return `<li><span class="n" aria-hidden="true">${i + 1}</span><div><h3>${name}: ${esc(TONE_LABEL[tone].toLowerCase())}</h3><p class="muted">${when}</p>
+          ${t ? `<div class="sample"><p><strong>${esc(t.subject)}</strong></p><p>${esc(t.body)}</p></div>` : ""}</div></li>`;
+      })
+      .join("");
+    const sent = s.messages
+      .filter((m) => m.kind === "overdue" || m.kind === "upcoming" || m.kind === "invoice")
+      .slice(0, 12)
+      .map((m) => `<tr><td>${shortDate(m.business_date)}</td><td>${esc(m.kind === "overdue" ? TONE_LABEL[m.tone] + " reminder " + m.sequence : m.kind === "upcoming" ? "Friendly nudge" : "Invoice")}</td>
+        <td>${esc(m.invoice_number)}</td><td>${esc(m.recipient)}</td><td>${esc(m.status)}${m.mode === "manual" ? " · manual" : ""}</td></tr>`)
+      .join("");
+    $("#view-reminders").innerHTML = `<div class="page-head"><h1>Reminders</h1><p class="muted">Kerdos chases unpaid invoices for you, by email. Financed and paid invoices are never chased.</p>
+      <div class="interval"><span class="muted">First reminder</span><strong class="num">${plural(st.first_after_due_days, "day")}</strong><span class="muted">after the due date, then every</span><strong class="num">${plural(st.every_days, "day")}</strong></div></div>
+      <ol class="steps">${steps}</ol>
+      <h2 class="section-title">Emails sent</h2>
+      <table><thead><tr><th scope="col">Day</th><th scope="col">What</th><th scope="col">Invoice</th><th scope="col">To</th><th scope="col">Status</th></tr></thead>
+      <tbody>${sent || `<tr><td colspan="5" class="muted">Nothing sent yet.</td></tr>`}</tbody></table>`;
   }
 
   function renderSide() {
-    const points = L.forecast(state);
-    const info = L.shortfall(points);
-    const owed = owedByClient();
-    const remindBtns = owed
-      .map((r) => `<button type="button" class="btn small" data-act="remind" data-id="${r.invoices[0].id}">Remind ${esc(r.client)} now</button>`)
+    const f = s.dash.forecast;
+    const sf = f.shortfall;
+    const owed = s.dash.debtors || [];
+    const acts = (s.dash.actions || [])
+      .map((a) => (a.type === "financing"
+        ? `<button type="button" class="btn primary" data-act="offer">${esc(a.label)}</button>`
+        : `<button type="button" class="btn small" data-act="remind" data-id="${esc(a.invoice_id)}">${esc(a.label)}</button>`))
       .join("");
-    const finance = info && !state.financed ? `<button type="button" class="btn primary" data-act="finance" data-amount="${info.amount}">Get ${eur(info.amount)} now</button>` : "";
     $("#side-panel").innerHTML = `
       <section><h2>Cash outlook</h2>
-        <p class="headline ${info ? "bad" : ""}">${info ? `In ${plural(info.lowestDay, "day")} you'll be ${eur(info.amount)} negative.` : "No shortfall in the next 30 days."}</p>
+        <p class="headline ${sf ? "bad" : ""}">${esc(f.headline)}</p>
         <div id="chart-side"></div></section>
-      <section><h2>Who owes you</h2>${owed.length ? `<ul class="owe">${owed.map((r) => `<li><span>${esc(r.client)}</span><span class="num">${eur(r.total)}</span></li>`).join("")}</ul>` : '<p class="muted">Nobody. All invoices are paid or financed.</p>'}</section>
-      <section><h2>Action plan</h2><div class="plan">${finance}${remindBtns}${!finance && !remindBtns ? '<p class="muted">Nothing to do right now.</p>' : ""}</div>
-      ${finance ? `<p class="muted">Advance against your unpaid invoices. Simulated in this mockup.</p>` : ""}</section>`;
-    renderForecastChart(points, info, $("#chart-side"), { id: "side" });
+      <section><h2>Who owes you</h2>${owed.length ? `<ul class="owe">${owed.map((d) => `<li><span>${esc(d.name)}</span><span class="num">${eur(d.outstanding_cents)}</span></li>`).join("")}</ul>` : '<p class="muted">Nobody. All invoices are paid or financed.</p>'}</section>
+      <section><h2>Action plan</h2><div class="plan">${acts || '<p class="muted">Nothing to do right now.</p>'}</div></section>`;
+    renderForecastChart(f, $("#chart-side"), { id: "side" });
+  }
+
+  async function loadClient() {
+    if (!clientToken) {
+      const pick = (list) => list.find((i) => i.source === "chat" && i.status === "sent") || list.find((i) => i.status === "sent") || list[0];
+      const inv = pick(s.invoices.filter((i) => i.direction === "receivable" && i.pay_token && i.status !== "draft" && i.status !== "cancelled"));
+      clientToken = inv ? inv.pay_token : null;
+    }
+    s.pay = null;
+    s.payError = null;
+    if (!clientToken) return;
+    try {
+      s.pay = await api("GET", "/api/pay/" + encodeURIComponent(clientToken));
+    } catch (e) {
+      s.payError = e.message;
+    }
   }
 
   function renderClient() {
-    const inv = state.invoices.find((i) => i.id === clientInvoiceId) || state.invoices.filter((i) => i.status === "unpaid").at(-1) || state.invoices.at(-1);
-    if (!inv) {
-      $("#view-client").innerHTML = `<p class="client-note">No invoice sent yet. Create one in Chat and it will show up here.</p>`;
+    const p = s.pay;
+    if (!p) {
+      $("#view-client").innerHTML = `<p class="client-note">${esc(s.payError || "No invoice sent yet. Create one in Chat and it will show up here.")}</p>`;
       return;
     }
-    const last = inv.reminders.at(-1);
-    const banner =
-      inv.status === "unpaid" && last
-        ? `<div class="banner ${last.tone}"><p><strong>${TONE_LABEL[last.tone]} reminder</strong></p><p>${esc(toneMessage(inv, last.tone))}</p></div>`
-        : "";
-    const done = inv.status === "paid";
+    const r = p.latest_reminder;
+    const banner = r ? `<div class="banner ${esc(r.tone || "")}"><p><strong>${r.tone ? TONE_LABEL[r.tone] + " reminder" : "Reminder"}</strong></p><p>${esc(r.text)}</p></div>` : "";
     $("#view-client").innerHTML = `<div class="phone">
-        <div class="from"><span class="avatar" aria-hidden="true">${esc(state.business[0])}</span>${esc(state.business)}</div>
+        <div class="from"><span class="avatar" aria-hidden="true">${esc(p.company_name.charAt(0))}</span>${esc(p.company_name)}</div>
         ${banner}
-        <div><p class="muted">Invoice ${invNo(inv)}</p><p class="amount">${eur(inv.amount)}</p></div>
-        <dl><dt>To</dt><dd>${esc(inv.client)}</dd><dt>For</dt><dd>${esc(inv.description)}</dd><dt>Due</dt><dd>${longDate(inv.dueDay)}</dd><dt>Status</dt><dd>${statusHtml(inv)}</dd></dl>
-        ${done ? `<div class="okbox"><h3>Paid, thank you</h3><p class="muted">Simulated payment. ${esc(inv.client)} would get a receipt by email.</p></div>` : `<button type="button" class="btn primary" data-act="pay" data-id="${inv.id}">Pay ${eur(inv.amount)} now</button>`}
+        <div><p class="muted">Invoice ${esc(p.number)}</p><p class="amount">${eur(p.can_pay ? p.outstanding_cents : p.amount_cents)}</p></div>
+        <dl><dt>To</dt><dd>${esc(p.client_name)}</dd><dt>For</dt><dd>${esc(p.description)}</dd><dt>Due</dt><dd>${longDate(p.due_date)}</dd><dt>Status</dt><dd>${statusHtml(p.status)}</dd></dl>
+        ${p.can_pay
+          ? `<button type="button" class="btn primary" data-act="pay">Pay ${eur(p.outstanding_cents)} now</button>`
+          : `<div class="okbox"><h3>Paid, thank you</h3><p class="muted">${esc(p.client_name)} gets a receipt by email.</p></div>`}
       </div>
-      <p class="client-note">This is what ${esc(inv.client)} sees on their phone. Sample data, no real payment.</p>`;
+      <p class="client-note">This is what ${esc(p.client_name)} sees on their phone. The payment is simulated; with BoC it would go through the client's 1Bank.</p>`;
+  }
+
+  function renderError() {
+    const fileHint = location.protocol === "file:"
+      ? "<p>This page was opened as a file. It needs the Kerdos API on the same address: start the backend and open <a href=\"http://localhost:8080/mockup/\">http://localhost:8080/mockup/</a>.</p>"
+      : `<p>Start the backend (see the repo's README), then <button type="button" class="btn small" data-act="retry">try again</button>.</p>`;
+    $("#view-error").innerHTML = `<div class="page-head"><h1>Can't reach the Kerdos API</h1><p class="muted">${esc(fatal && fatal.message)}</p></div>${fileHint}`;
   }
 
   function render() {
-    $("#app").dataset.view = view;
+    const showing = fatal ? "error" : view;
+    $("#app").dataset.view = fatal ? "error" : view;
     document.querySelectorAll(".nav [data-view]").forEach((b) => (b.getAttribute("data-view") === view ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
-    document.querySelectorAll(".main > section").forEach((s) => (s.hidden = s.id !== `view-${view}`));
-    $("#biz").textContent = state.business;
-    $("#today").textContent = state.day === 0 ? `Today, ${longDate(0)}` : `${longDate(state.day)} · day ${state.day}`;
+    document.querySelectorAll(".main > section").forEach((sec) => (sec.hidden = sec.id !== `view-${showing}`));
     $("#btn-client-view").textContent = view === "client" ? "Back to owner app" : "Client view";
+    if (fatal) {
+      renderError();
+      return;
+    }
+    const d = s.dash;
+    $("#biz").textContent = d.company;
+    $("#badge").hidden = !d.demo;
+    $("#btn-skip-time").hidden = !d.demo;
+    $("#btn-reset").hidden = !d.demo;
+    $("#today").textContent = longDate(d.today) + (d.clock_offset_days ? ` · day ${d.clock_offset_days}` : "");
     renderChat();
     renderInvoices();
     renderDebtors();
-    renderReminders();
     renderForecastView();
-    renderClient();
+    renderReminders();
     renderSide();
+    if (view === "client") renderClient();
   }
 
-  function setState(next) {
-    state = next;
-    render();
-  }
+  // ---------- actions ----------
+  const sendChat = (text) => act(async () => {
+    view = "chat";
+    await api("POST", "/api/chat", { text });
+  });
 
   function showView(name) {
     view = name;
+    if (name === "client") {
+      loadClient().then(render);
+      return;
+    }
     render();
   }
 
-  /* ---------- actions ---------- */
-  function handleChatSubmit(text) {
-    const t = text.trim();
-    if (!t) return;
-    chat.push({ from: "me", text: t });
-    const parsed = L.parseInvoiceCommand(t);
-    if (!parsed) {
-      chat.push({ from: "kumbares", text: "I need a client and an amount to make an invoice. Try: Invoice Kostas, 3 hours at €40", chips: ["Invoice Kostas €120"] });
-      return render();
-    }
-    const n = Math.max(...state.invoices.map((i) => Number(i.id.split("-")[1]))) + 1;
-    const inv = { id: `inv-${n}`, client: parsed.client, amount: parsed.amount, description: parsed.description, sentDay: state.day, dueDay: state.day + 14, status: "unpaid", reminders: [] };
-    clientInvoiceId = inv.id;
-    chat.push({
-      from: "kumbares",
-      text: `Done. I sent it through Jinius with a payment link and emailed a copy. I'll remind ${inv.client} every ${state.reminderEveryDays} days until it's paid.`,
-      card: { type: "invoice", id: inv.id },
-    });
-    setState({ ...state, invoices: [...state.invoices, inv] });
-  }
-
-  function handleSkipTime() {
-    const before = state;
-    const after = L.advanceDays(state, SKIP_DAYS);
-    chat.push({ from: "system", text: `${SKIP_DAYS} days later · ${longDate(after.day)}` });
-    for (const e of before.inflows.filter((e) => e.day <= after.day)) {
-      chat.push({ from: "kumbares", text: `${e.label.replace(/ \(sample\)$/, "")} of ${eur(e.amount)} arrived.` });
-    }
-    for (const inv of after.invoices) {
-      for (const r of inv.reminders.filter((r) => r.day > before.day)) {
-        chat.push({ from: "kumbares", text: `I reminded ${inv.client}.`, card: { type: "reminder", id: inv.id, tone: r.tone, message: toneMessage(inv, r.tone, r.day) } });
-      }
-    }
-    chat = chat.filter((m) => !(m.card && m.card.type === "warning"));
-    const info = L.shortfall(L.forecast(after));
-    if (info && !after.financed) {
-      const firstOut = after.outflows.find((e) => e.day === after.day + info.firstDay);
-      chat.push({ from: "kumbares", text: "Heads up.", card: { type: "warning", lowestDay: info.lowestDay, amount: info.amount, firstOut, firstDate: after.day + info.firstDay, unpaidTotal: after.invoices.filter((i) => i.status === "unpaid").reduce((s, i) => s + i.amount, 0) } });
-    }
-    setState(after);
-  }
-
-  function handleRemind(id) {
-    const next = L.remindNow(state, id);
-    const inv = state.invoices.find((i) => i.id === id);
-    if (next === state) {
-      chat.push({ from: "kumbares", text: `I already reminded ${inv.client} today.` });
-      return render();
-    }
-    const r = next.invoices.find((i) => i.id === id).reminders.at(-1);
-    chat.push({ from: "kumbares", text: `I reminded ${inv.client}.`, card: { type: "reminder", id, tone: r.tone, message: toneMessage(inv, r.tone) } });
-    setState(next);
-  }
-
-  function handleFinancing(amount) {
-    const next = L.applyFinancing(state, amount);
-    if (next === state) return;
-    chat.push({ from: "kumbares", text: "Done. It's in your account.", card: { type: "financed", amount } });
-    setState(next);
-  }
-
-  function handleRemindAll() {
-    let next = state;
-    const ids = unpaid().map((i) => i.id);
-    for (const id of ids) {
-      const after = L.remindNow(next, id);
-      if (after !== next) {
-        const inv = after.invoices.find((i) => i.id === id);
-        const r = inv.reminders.at(-1);
-        chat.push({ from: "kumbares", text: `I reminded ${inv.client}.`, card: { type: "reminder", id, tone: r.tone, message: toneMessage(inv, r.tone) } });
-      }
-      next = after;
-    }
-    if (next === state) chat.push({ from: "kumbares", text: "Everyone has already been reminded today." });
-    setState(next);
-  }
-
-  function handlePay(id) {
-    setState({ ...state, invoices: state.invoices.map((i) => (i.id === id ? { ...i, status: "paid" } : i)) });
-  }
-
-  /* ---------- wiring ---------- */
   document.addEventListener("click", (e) => {
     const el = e.target.closest("[data-act], [data-view]");
     if (!el) return;
@@ -403,19 +456,59 @@
       const input = $("#chat-input");
       input.value = el.dataset.text;
       input.focus();
-    } else if (a === "finance") handleFinancing(Number(el.dataset.amount));
-    else if (a === "remind") handleRemind(el.dataset.id);
-    else if (a === "remind-all") handleRemindAll();
-    else if (a === "pay") handlePay(el.dataset.id);
+    } else if (a === "offer") {
+      sendChat("Get money now");
+    } else if (a === "remind-all") {
+      sendChat("Remind everyone");
+    } else if (a === "accept") {
+      act(async () => {
+        await api("POST", "/api/financing/offers/" + el.dataset.id + "/accept");
+        view = "chat";
+      });
+    } else if (a === "remind") {
+      act(async () => {
+        const m = await api("POST", "/api/invoices/" + el.dataset.id + "/remind");
+        notify(`Reminder ${m.invoice_number ? "for " + m.invoice_number + " " : ""}sent (${m.tone ? TONE_LABEL[m.tone].toLowerCase() : "friendly nudge"}).`);
+      });
+    } else if (a === "client") {
+      clientToken = el.dataset.token;
+      showView("client");
+    } else if (a === "pay") {
+      act(async () => {
+        s.pay = await api("POST", "/api/pay/" + encodeURIComponent(clientToken));
+      });
+    } else if (a === "tab") {
+      invTab = el.dataset.dir;
+      renderInvoices();
+    } else if (a === "retry") {
+      refresh();
+    }
   });
+
   $("#chat-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const input = $("#chat-input");
-    handleChatSubmit(input.value);
+    const text = input.value.trim();
+    if (!text) return;
     input.value = "";
+    sendChat(text);
   });
-  $("#btn-skip-time").addEventListener("click", handleSkipTime);
-  $("#btn-client-view").addEventListener("click", () => showView(view === "client" ? "chat" : "client"));
+  $("#btn-skip-time").addEventListener("click", () => act(async () => {
+    view = "chat";
+    await api("POST", "/api/demo/skip", { days: 3 });
+  }));
+  $("#btn-reset").addEventListener("click", () => act(async () => {
+    await api("POST", "/api/demo/reset");
+    view = "chat";
+    clientToken = null;
+    s.offers = {};
+    notify("Demo reset: back to the start of the story.");
+  }));
+  $("#btn-client-view").addEventListener("click", () => {
+    if (view === "client") return showView("chat");
+    clientToken = null;
+    showView("client");
+  });
 
-  render();
+  refresh();
 })();

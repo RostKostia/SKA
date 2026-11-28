@@ -43,6 +43,7 @@ On Windows PowerShell, see [Windows (PowerShell)](../README.md#windows-powershel
 | `KERDOS_PUBLIC_URL` | `http://localhost:3000` | The frontend. Pay links point to `<this>/pay/<token>`; BoC consent returns to `<this>/settings` |
 | `KERDOS_DEMO` | `1` | Enables `/api/demo/skip` and `/api/demo/reset`. Set it to `0` outside the demo |
 | `KERDOS_SEED_FILE` | `../db/seed/sample.sql` | What reset loads |
+| `KERDOS_MOCKUP_DIR` | `../mockup` | The clickable mockup, served at `/mockup/` (and `/` redirects there) when the folder exists. `off` turns it off |
 | `KERDOS_AUTH` | `dev` | Every request acts as the first admin user. Google sign-in comes next |
 | `KERDOS_WORKER_INTERVAL` | `1m` | How often the worker queues due reminders and sends emails |
 | `KERDOS_MOCK_FINANCING_FEE_BP` | `150` | The sample fee on simulated offers (1.5%) |
@@ -59,6 +60,7 @@ All bodies are JSON. Money is in integer cents (`*_cents`) and dates are `YYYY-M
 | Method and path | What it does |
 |---|---|
 | `GET /healthz` | Database, bank, mailer and demo status |
+| `GET /mockup/` | The clickable mockup, running on this API (same origin, so no CORS) |
 | `GET /api/me` | The signed-in user |
 | `GET /api/dashboard` | Side panel: balance, forecast headline and points, who owes what, action plan |
 | `GET /api/chat` · `POST /api/chat {text}` | Chat history; send a message. Replies carry a `card` (`invoice`, `reminder`, `warning`, `offer`, `financed`, `paid`, `need_details`, `suggestions`) and the card's current `invoice` |

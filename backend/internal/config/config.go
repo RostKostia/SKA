@@ -16,6 +16,7 @@ type Config struct {
 	PublicURL   string // KERDOS_PUBLIC_URL: the frontend, used for pay links. Default http://localhost:3000
 	Demo        bool   // KERDOS_DEMO=1 enables /api/demo/* (skip time, reset)
 	SeedFile    string // KERDOS_SEED_FILE, default ../db/seed/sample.sql
+	MockupDir   string // KERDOS_MOCKUP_DIR, default ../mockup: served at /mockup/ when the folder exists. "off" disables it
 	AuthMode    string // KERDOS_AUTH: "dev" (default) signs every request in as the first admin
 
 	WorkerInterval time.Duration // KERDOS_WORKER_INTERVAL, default 1m: reminder and email worker
@@ -48,6 +49,7 @@ func Load() Config {
 		PublicURL:        strings.TrimRight(get("KERDOS_PUBLIC_URL", "http://localhost:3000"), "/"),
 		Demo:             get("KERDOS_DEMO", "1") == "1",
 		SeedFile:         get("KERDOS_SEED_FILE", "../db/seed/sample.sql"),
+		MockupDir:        get("KERDOS_MOCKUP_DIR", "../mockup"),
 		AuthMode:         get("KERDOS_AUTH", "dev"),
 		WorkerInterval:   duration("KERDOS_WORKER_INTERVAL", time.Minute),
 		FinancingFeeBP:   int64(number("KERDOS_MOCK_FINANCING_FEE_BP", 150)),
