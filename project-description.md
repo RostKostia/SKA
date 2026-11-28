@@ -27,7 +27,7 @@ Cafés, tradespeople and freelancers rarely fail for lack of customers. They fai
 3. **Warns you before you go negative.** The forecast combines the bank balance, upcoming bills, and each unpaid invoice on the day *that client* usually pays: "In 12 days you'll be €800 negative."
 4. **Lets you act early.** When a gap is coming, the owner sees who owes what and can remind any client at once.
 
-Planned after the first brief, not built yet: Google sign-in, Google Sheets sync and export (only the CSV export exists so far), Gmail reminders with editable templates and an optional Claude draft, and a spending forecast by category against a monthly budget (alert above 80%). The cash-gap forecast stays the headline.
+Planned after the first brief, not built yet: Google Sheets sync and export (only the CSV export exists so far), Gmail reminders with editable templates and an optional Claude draft, and a spending forecast by category against a monthly budget (alert above 80%). The cash-gap forecast stays the headline.
 
 **Out of scope:** physical cash in the till (the bank can't see it) and a WhatsApp channel (email only for the MVP).
 **Nice to have, if time allows:** Greek / English / Russian translation for expats, a client reliability score, and a "what if" chat ("Can I afford to hire someone?").
@@ -41,9 +41,9 @@ Planned after the first brief, not built yet: Google sign-in, Google Sheets sync
 
 ## The 2-minute demo
 
-1. The owner types **"Invoice Kostas €120"**. The invoice arrives on a second phone in the room, and Kostas can pay it there.
-2. **Skip time** by 3 days. A deposit lands, and Kerdos sends Andreas a firm reminder automatically.
-3. Kostas opens the link on the second phone and pays. The invoice turns **Paid** and its reminders stop.
+1. The owner types **"Invoice Kostas €120"**. The invoice email with its payment link arrives on a second phone in the room.
+2. On the Debtors or Invoices page, **Remind now** on Andreas's overdue invoice sends a polite reminder at once. Automatic reminders follow the rules shown on the Reminders page.
+3. The **Reminders** page shows every email Kerdos sent, and **Debtors** shows who owes what.
 
 The commands for each step are under [Run the demo](#run-the-demo).
 
@@ -52,7 +52,8 @@ The commands for each step are under [Run the demo](#run-the-demo).
 - Set `KERDOS_BANK=mock`, so the demo never waits on the bank sandbox.
 - Email is real when the `SMTP_*` settings are filled in (Gmail). Check every sample client's address first, or leave `SMTP_*` empty so emails are only logged.
 - Point Kostas at the second phone: `UPDATE counterparties SET email = '<demo phone email>' WHERE name LIKE 'Kostas%';`
-- Reset the story before each rehearsal: `POST /api/demo/reset`.
+- Reset the story before each rehearsal: `curl -X POST localhost:8080/api/demo/reset` (there is no button for it in the app).
+- Don't open the Forecast page on stage: it still has the old "Get €800 now" financing button.
 - Rehearse twice and record a backup video of the demo.
 
 ## How it fits together
@@ -108,11 +109,15 @@ npm run dev
 
 No keys are needed: the bank, Jinius, email and chat parsing all have working mocks. Add `ANTHROPIC_API_KEY`, the `SMTP_*` settings or `KERDOS_BANK=boc` with the `BOC_*` settings to switch the real ones on.
 
+**Database created on 27 or 28 Nov?** Run the `migrate up` command from step 1 again: it adds sign-in (`000002_accounts`) and keeps your data.
+
+**Sign-in.** By default (`KERDOS_AUTH=dev`) there is no sign-in: everyone acts as the owner, which keeps the curl commands above simple. Set `KERDOS_AUTH=accounts` in `.env` and restart the backend to require accounts. The first person to open the app creates the owner account; the owner invites the others from the Team page. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` for "Continue with Google". With accounts on, the curl commands need a session: sign in with `POST /api/auth/login` and send the `kerdos_session` cookie back.
+
 On Windows PowerShell, several of these commands need small changes: see [Windows (PowerShell)](#windows-powershell) below.
 
 ### Run the demo
 
-In the app's Chat, send "Invoice Kostas €120". Then skip 3 days with `curl -X POST localhost:8080/api/demo/skip -d '{"days":3}'` (Andreas gets a firm reminder), then pay Kostas's invoice from its link ("Pay now"). `curl -X POST localhost:8080/api/demo/reset` starts the story again. Every step as an API call: [`backend/README.md`](backend/README.md#the-demo-through-the-api).
+In the app's Chat, send "Invoice Kostas €120". Then press Remind now on Andreas's overdue invoice (Debtors or Invoices page) and open the Reminders page. The app has no Skip time button and no pay page: to move time forward, use `curl -X POST localhost:8080/api/demo/skip -d '{"days":3}'`. `curl -X POST localhost:8080/api/demo/reset` starts the story again. Every step as an API call: [`backend/README.md`](backend/README.md#the-demo-through-the-api).
 
 ## Windows (PowerShell)
 
