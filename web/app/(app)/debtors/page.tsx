@@ -1,14 +1,18 @@
-import { Suspense } from "react";
-import { PageFallback } from "@/components/PageFallback";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { remindInvoice } from "@/app/(app)/actions";
 import { apiErrorView } from "@/components/ErrorPanel";
+import { PageFallback } from "@/components/PageFallback";
+import { PageHeader } from "@/components/PageHeader";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Table, TBody, Td, Th, THead, Tr } from "@/components/ui/Table";
 import { getApi } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
 
-export const metadata: Metadata = { title: "Debtors · Kerdos" };
+export const metadata: Metadata = { title: "Receivables · Kerdos" };
 
 async function DebtorsPageContent() {
   let debtors;
@@ -20,52 +24,69 @@ async function DebtorsPageContent() {
   const total = debtors.reduce((sum, d) => sum + d.outstanding_cents, 0);
 
   return (
-    <main className="shell__main">
-      <h1>Who owes you</h1>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+      <PageHeader
+        title="Outstanding receivables"
+        description={
+          debtors.length === 0
+            ? undefined
+            : `${formatMoney(total, "EUR")} across ${debtors.length} ${debtors.length === 1 ? "client" : "clients"}. Financed invoices are not listed.`
+        }
+      />
       {debtors.length === 0 ? (
-        <p className="muted">Nobody owes you anything right now.</p>
+        <Card>
+          <p className="text-muted">No outstanding receivables.</p>
+        </Card>
       ) : (
-        <>
-          <p className="muted">
-            {formatMoney(total, "EUR")} across {debtors.length} {debtors.length === 1 ? "client" : "clients"}. Financed invoices are not listed.
-          </p>
-          <div className="table-wrap">
-            <table className="table">
-              <caption className="sr-only">Clients with unpaid invoices</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Client</th>
-                  <th scope="col" className="num">Owes</th>
-                  <th scope="col" className="num">Open invoices</th>
-                  <th scope="col" className="num">Days overdue</th>
-                  <th scope="col">Reminders</th>
-                  <th scope="col"><span className="sr-only">Actions</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {debtors.map((d) => (
-                  <tr key={d.counterparty_id}>
-                    <th scope="row">{d.name}</th>
-                    <td className="num">{formatMoney(d.outstanding_cents, "EUR")}</td>
-                    <td className="num">{d.open_invoices}</td>
-                    <td className="num">{d.max_days_overdue > 0 ? d.max_days_overdue : "Not yet due"}</td>
-                    <td>{d.reminders_sent === 0 ? "None yet" : `${d.reminders_sent}, last ${d.last_tone ?? ""}`}</td>
-                    <td className="actions">
+        <div className="reveal" style={{ "--i": 1 } as React.CSSProperties}>
+          <Table caption="Clients with unpaid invoices">
+            <THead>
+              <Tr>
+                <Th>Client</Th>
+                <Th className="text-right">Outstanding</Th>
+                <Th className="text-right">Open invoices</Th>
+                <Th>Overdue</Th>
+                <Th>Reminders</Th>
+                <Th><span className="sr-only">Actions</span></Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {debtors.map((d) => (
+                <Tr key={d.counterparty_id}>
+                  <Th scope="row" className="text-left font-medium normal-case tracking-normal text-foreground">
+                    <span className="block max-w-56 truncate" title={d.name}>{d.name}</span>
+                  </Th>
+                  <Td className="whitespace-nowrap text-right">{formatMoney(d.outstanding_cents, "EUR")}</Td>
+                  <Td className="text-right">{d.open_invoices}</Td>
+                  <Td>
+                    {d.max_days_overdue > 0 ? (
+                      <Badge tone="danger">{d.max_days_overdue} days</Badge>
+                    ) : (
+                      <span className="text-muted">Not yet due</span>
+                    )}
+                  </Td>
+                  <Td className="whitespace-nowrap">
+                    {d.reminders_sent === 0 ? "None yet" : `${d.reminders_sent}, last ${d.last_tone ?? ""}`}
+                  </Td>
+                  <Td>
+                    <div className="flex items-center justify-end gap-3 whitespace-nowrap">
                       <form action={remindInvoice}>
                         <input type="hidden" name="id" value={d.oldest_invoice_id} />
                         <input type="hidden" name="returnTo" value="/debtors" />
-                        <Button type="submit" className="key--small">Remind now</Button>
+                        <Button type="submit" size="sm">Remind now</Button>
                       </form>
-                      <Link href={`/invoices?q=${encodeURIComponent(d.name)}`}>Invoices</Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+                      <Link href={`/invoices?q=${encodeURIComponent(d.name)}`} className="text-sm text-accent underline-offset-4 hover:underline">
+                        Invoices
+                      </Link>
+                    </div>
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </div>
       )}
-    </main>
+    </div>
   );
 }
 
