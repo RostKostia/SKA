@@ -20,6 +20,7 @@ type Server struct {
 	Log       *slog.Logger
 	AuthMode  string // "dev"
 	PublicURL string // the frontend, for the redirect after BoC consent
+	MockupDir string // if set, the clickable mockup is served at /mockup/ (same origin, so no CORS needed)
 }
 
 type handler func(w http.ResponseWriter, r *http.Request, u app.User) error
@@ -53,6 +54,7 @@ func (s *Server) Handler() http.Handler {
 	route("GET /api/financing/offers/{id}", s.getOffer)
 	route("POST /api/financing/offers/{id}/accept", s.acceptOffer)
 	route("GET /api/messages", s.listMessages)
+	route("POST /api/messages/{id}/retry", s.retryMessage)
 	route("GET /api/reminders/settings", s.reminderSettings)
 	route("POST /api/demo/skip", s.skip)
 	route("POST /api/bank/connect", s.bankConnect)
@@ -65,6 +67,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/pay/{token}", s.public(s.getPay))
 	mux.HandleFunc("POST /api/pay/{token}", s.public(s.postPay))
 	mux.HandleFunc("GET /api/bank/callback", s.bankCallback)
+
+	if s.MockupDir != "" {
+		files := http.StripPrefix("/mockup/", http.FileServer(http.Dir(s.MockupDir)))
+		mux.Handle("GET /mockup/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-cache")
+			files.ServeHTTP(w, r)
+		}))
+		toMockup := func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/mockup/", http.StatusFound) }
+		mux.HandleFunc("GET /mockup", toMockup)
+		mux.HandleFunc("GET /{$}", toMockup)
+	}
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, errBody("not_found", "no such endpoint: "+r.Method+" "+r.URL.Path))
@@ -347,6 +360,15 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request, _ app.User
 		return err
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"messages": list})
+	return nil
+}
+
+func (s *Server) retryMessage(w http.ResponseWriter, r *http.Request, u app.User) error {
+	m, err := s.App.RetryMessage(r.Context(), u, r.PathValue("id"))
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, m)
 	return nil
 }
 

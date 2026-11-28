@@ -40,7 +40,7 @@ flowchart LR
 
 - **Database:** the business rules live in PostgreSQL views and functions: overdue status, reminders due, the forecast, financing. The API and the tests use the same rules.
 - **Backend:** a Go JSON API. Every outside service sits behind an interface with a mock, so **the demo never depends on a service being up**.
-- **Frontend:** a Next.js app in `web/` that shows what the backend returns; `mockup/` is the original design reference.
+- **Frontend:** a Next.js app in `web/` that shows what the backend returns. `mockup/` is the original design, now also running on the API, with the demo controls (Skip time, Reset) and the client's pay page.
 
 ## Quick start
 
@@ -73,7 +73,7 @@ npm run dev
 
 On Windows PowerShell, several of these commands need small changes: see [Windows (PowerShell)](#windows-powershell) below.
 
-To see the design without running anything, open `mockup/index.html` in a browser.
+**The clickable mockup on live data:** with the backend running, open http://localhost:8080/mockup/. It has the whole demo in one screen: chat, Skip time, the warning, "Get €800 now", and the client's phone view with "Pay now". Opened as a file, it only shows how to start the API.
 
 No keys are needed: the bank, Jinius, email and chat parsing all have working mocks. Add `ANTHROPIC_API_KEY`, the `SMTP_*` settings or `KERDOS_BANK=boc` with the `BOC_*` settings to switch the real ones on (see `.env.example`).
 
@@ -163,7 +163,7 @@ backend/    Go API: see backend/README.md
 web/        Next.js frontend: see web/README.md
 db/         PostgreSQL schema (migrations), sample data, demo test: see db/README.md
 docs/       data-model.md (data model and team decisions), superpowers/ (mockup and frontend specs)
-mockup/     clickable HTML mockup, the visual reference
+mockup/     clickable mockup on the API, served at http://localhost:8080/mockup/ (logic.js and data.js are the original rules, kept for reference)
 KERDOS_BRIEF.md   project brief
 .env.example      every setting, with comments (copy to .env, never commit .env)
 ```

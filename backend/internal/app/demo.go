@@ -79,7 +79,12 @@ func (a *App) SkipDays(ctx context.Context, u User, days int) (SkipResult, error
 			_ = say("assistant", fmt.Sprintf("Paid %s: %s.", m.Label, money.Format(m.AmountCents)), nil)
 		}
 		for _, r := range rep.Reminders {
-			_ = say("assistant", fmt.Sprintf("I reminded %s about %s (%s).", r.Client, r.Number, toneLabel(r.Kind, r.Tone)),
+			// The background sender may have picked this email up first; SendNow waits for its outcome.
+			m, err := a.SendNow(ctx, r.MessageID)
+			if err != nil {
+				m = Message{InvoiceNumber: r.Number, Kind: r.Kind, Tone: r.Tone, Status: "queued"}
+			}
+			_ = say("assistant", reminderLine(r.Client, m),
 				map[string]any{"type": "reminder", "message_id": r.MessageID, "invoice_id": r.InvoiceID, "tone": r.Tone, "sequence": r.Sequence})
 		}
 	}

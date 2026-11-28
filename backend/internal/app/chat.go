@@ -240,7 +240,8 @@ func (a *App) respond(ctx context.Context, u User, text string, res parse.Result
 }
 
 func (a *App) chatSend(ctx context.Context, u User, cpID string, d *parse.Draft, sourceText string, reply replyFunc) error {
-	inv, err := a.createAndSend(ctx, u, cpID, d.Lines, "chat", sourceText)
+	sent, err := a.createAndSend(ctx, u, cpID, d.Lines, "chat", sourceText)
+	inv := sent.Invoice
 	if err != nil {
 		var appErr *Error
 		if errors.As(err, &appErr) && inv.ID != "" {
@@ -252,9 +253,23 @@ func (a *App) chatSend(ctx context.Context, u User, cpID string, d *parse.Draft,
 	if inv.PaymentLinkURL != nil && strings.Contains(*inv.PaymentLinkURL, "/pay/") {
 		via = "through Jinius (simulated)"
 	}
-	return reply(fmt.Sprintf("Done. I sent invoice %s for %s to %s %s with a payment link, and emailed a copy. It's due on %s; I'll start reminding them if it's still unpaid after that.",
-		inv.Number, money.Format(inv.AmountCents), inv.CounterpartyName, via, longDate(inv.DueDate.Time)),
-		map[string]any{"type": "invoice", "invoice_id": inv.ID})
+	card := map[string]any{"type": "invoice", "invoice_id": inv.ID}
+	head := fmt.Sprintf("I sent invoice %s for %s to %s %s with a payment link", inv.Number, money.Format(inv.AmountCents), inv.CounterpartyName, via)
+	due := fmt.Sprintf("It's due on %s; I'll start reminding them if it's still unpaid after that.", longDate(inv.DueDate.Time))
+	m := sent.Email
+	switch {
+	case m == nil:
+		return reply("Done. "+head+". "+due, card)
+	case m.Status == "sent":
+		return reply(fmt.Sprintf("Done. %s, and emailed a copy to %s. %s", head, m.Recipient, due), card)
+	default:
+		card["email_message_id"], card["email_status"] = m.ID, m.Status
+		if m.Status == "failed" {
+			return reply(fmt.Sprintf("%s, but the email copy to %s didn't go out: %s. Fix that, then press Retry in the email log. %s",
+				head, m.Recipient, emailProblem(m.Error), due), card)
+		}
+		return reply(fmt.Sprintf("%s. The email copy to %s: %s. %s", head, m.Recipient, outcome(*m), due), card)
+	}
 }
 
 func (a *App) chatRemind(ctx context.Context, u User, res parse.Result, reply replyFunc) error {
@@ -310,8 +325,7 @@ func (a *App) chatRemind(ctx context.Context, u User, res parse.Result, reply re
 		if m.Sequence != nil {
 			seq = *m.Sequence
 		}
-		if err := reply(fmt.Sprintf("I reminded %s about %s (%s).", client, m.InvoiceNumber, toneLabel(m.Kind, m.Tone)),
-			map[string]any{"type": "reminder", "message_id": m.ID, "invoice_id": id, "tone": m.Tone, "sequence": seq}); err != nil {
+		if err := reply(reminderLine(client, m), map[string]any{"type": "reminder", "message_id": m.ID, "invoice_id": id, "tone": m.Tone, "sequence": seq}); err != nil {
 			return err
 		}
 	}

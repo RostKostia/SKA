@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -76,11 +77,19 @@ func run(log *slog.Logger) error {
 	}
 	log.Info("kerdos-api starting", "addr", cfg.HTTPAddr, "bank", cfg.BankMode, "mailer", a.Mailer.Provider(), "parser", parser, "demo", cfg.Demo, "auth", cfg.AuthMode)
 
+	mockupDir := ""
+	if cfg.MockupDir != "off" {
+		if st, err := os.Stat(cfg.MockupDir); err == nil && st.IsDir() {
+			mockupDir = cfg.MockupDir
+			log.Info("mockup on the API", "url", "http://localhost"+portOf(cfg.HTTPAddr)+"/mockup/")
+		}
+	}
+
 	go a.Run(ctx, cfg.WorkerInterval)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           (&httpapi.Server{App: a, Log: log, AuthMode: cfg.AuthMode, PublicURL: cfg.PublicURL}).Handler(),
+		Handler:           (&httpapi.Server{App: a, Log: log, AuthMode: cfg.AuthMode, PublicURL: cfg.PublicURL, MockupDir: mockupDir}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
@@ -95,6 +104,14 @@ func run(log *slog.Logger) error {
 	shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdown)
+}
+
+// portOf turns ":8080" or "127.0.0.1:8080" into ":8080" for the log line.
+func portOf(addr string) string {
+	if i := strings.LastIndex(addr, ":"); i >= 0 {
+		return addr[i:]
+	}
+	return ":" + addr
 }
 
 // waitForDB retries for up to 30 seconds, so `docker compose up` and the API can start together.
