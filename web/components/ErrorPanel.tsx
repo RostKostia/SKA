@@ -1,21 +1,24 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ApiError } from "@/lib/api/client";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { SIGN_IN_HREF } from "@/lib/nav";
 
 export function ErrorPanel({ error }: { error: ApiError }) {
   const unreachable = error.status === 0;
   return (
-    <main className="shell__main" role="alert" style={{ paddingTop: "2rem" }}>
-      <div className="slab" style={{ maxWidth: "36rem", display: "grid", gap: "0.75rem" }}>
-        <h1>{unreachable ? "Kerdos can't reach its server" : "Something went wrong"}</h1>
-        <p>{error.message}</p>
-        <div>
-          <Link href="/" className="key key--primary">
-            Try again
-          </Link>
-        </div>
+    <Card role="alert" className="grid max-w-xl gap-3">
+      <h1 className="text-xl font-semibold tracking-tight">
+        {unreachable ? "Kerdos can't reach its server" : "Something went wrong"}
+      </h1>
+      <p className="text-muted">{error.message}</p>
+      <div>
+        <Button asChild variant="primary">
+          <Link href="/">Try again</Link>
+        </Button>
       </div>
-    </main>
+    </Card>
   );
 }
 
@@ -23,6 +26,6 @@ export function ErrorPanel({ error }: { error: ApiError }) {
 // is rethrown. Signed out (401) goes to the sign-in page.
 export function apiErrorView(error: unknown) {
   if (!(error instanceof ApiError)) throw error;
-  if (error.status === 401) redirect("/signin");
+  if (error.status === 401) redirect(SIGN_IN_HREF);
   return <ErrorPanel error={error} />;
 }

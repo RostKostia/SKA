@@ -1,15 +1,22 @@
-import { Suspense } from "react";
-import { PageFallback } from "@/components/PageFallback";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 import { cancelInvoice, remindInvoice } from "@/app/(app)/actions";
 import { apiErrorView } from "@/components/ErrorPanel";
+import { PageFallback } from "@/components/PageFallback";
+import { PageHeader } from "@/components/PageHeader";
+import { StatusBadge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { StatusStamp } from "@/components/ui/StatusStamp";
+import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Table, TBody, Td, Th, THead, Tr } from "@/components/ui/Table";
 import { getApi } from "@/lib/api";
 import type { Direction, DisplayStatus, Invoice } from "@/lib/api/types";
-import { formatAmount, formatDate } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import { fold } from "@/lib/search";
+import { statusMeta } from "@/lib/status";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Invoices · Kerdos" };
 
@@ -21,15 +28,24 @@ const SORTS: Record<string, { label: string; key: (i: Invoice) => string | numbe
   issue_date: { label: "Issue date", key: (i) => i.issue_date },
   amount: { label: "Amount", key: (i) => i.amount_cents },
   number: { label: "Number", key: (i) => i.number },
-  counterparty: { label: "Counterparty", key: (i) => i.counterparty_name },
+  counterparty: { label: "Client or supplier", key: (i) => i.counterparty_name },
 };
 const TABS: { direction: Direction; label: string }[] = [
-  { direction: "receivable", label: "From the company" },
-  { direction: "payable", label: "To the company" },
+  { direction: "receivable", label: "Receivable" },
+  { direction: "payable", label: "Payable" },
 ];
 const OPEN: DisplayStatus[] = ["unpaid", "overdue", "partially_paid"];
 
 const one = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value) ?? "";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="grid min-w-36 gap-1 text-sm font-medium">
+      {label}
+      {children}
+    </label>
+  );
+}
 
 async function InvoicesPageContent({ searchParams }: { searchParams: Promise<Params> }) {
   const params = await searchParams;
@@ -59,101 +75,119 @@ async function InvoicesPageContent({ searchParams }: { searchParams: Promise<Par
   const returnTo = here(direction);
 
   return (
-    <main className="shell__main">
-      <h1>Invoices</h1>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+      <PageHeader
+        title="Invoices"
+        actions={
+          <Button asChild>
+            <a href={`/export/invoices?format=csv&direction=${direction}`}>Export CSV</a>
+          </Button>
+        }
+      />
 
-      <nav aria-label="Direction" className="tabs">
-        {TABS.map((tab) => (
-          <Link key={tab.direction} href={here(tab.direction)} aria-current={tab.direction === direction ? "page" : undefined}>
-            {tab.label}
-          </Link>
-        ))}
+      <nav aria-label="Direction" className="reveal inline-flex w-fit gap-1 rounded-lg border border-border bg-surface p-1" style={{ "--i": 1 } as React.CSSProperties}>
+        {TABS.map((tab) => {
+          const current = tab.direction === direction;
+          return (
+            <Link
+              key={tab.direction}
+              href={here(tab.direction)}
+              aria-current={current ? "page" : undefined}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:text-foreground",
+                current && "bg-surface-raised text-foreground",
+              )}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
       </nav>
 
-      <form className="toolbar" role="search" action="/invoices">
+      <form className="reveal flex flex-wrap items-end gap-3" role="search" action="/invoices" style={{ "--i": 2 } as React.CSSProperties}>
         <input type="hidden" name="direction" value={direction} />
-        <label>
-          <span className="sr-only">Search invoices</span>
-          <input className="field" name="q" defaultValue={one(params.q)} placeholder="Search by name, number or description" />
-        </label>
-        <label>
-          Status
-          <select className="field" name="status" defaultValue={status ?? ""}>
+        <div className="min-w-60 flex-1">
+          <label className="sr-only" htmlFor="invoice-search">Search invoices</label>
+          <Input id="invoice-search" name="q" defaultValue={one(params.q)} placeholder="Search by name, number or description" />
+        </div>
+        <Field label="Status">
+          <Select name="status" defaultValue={status ?? ""}>
             <option value="">All</option>
-            {STATUSES.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
-          </select>
-        </label>
-        <label>
-          Sort by
-          <select className="field" name="sort" defaultValue={sort}>
-            {Object.entries(SORTS).map(([value, s]) => <option key={value} value={value}>{s.label}</option>)}
-          </select>
-        </label>
-        <label>
-          Order
-          <select className="field" name="order" defaultValue={desc ? "desc" : "asc"}>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>{statusMeta(s).label}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Sort by">
+          <Select name="sort" defaultValue={sort}>
+            {Object.entries(SORTS).map(([value, s]) => (
+              <option key={value} value={value}>{s.label}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Order">
+          <Select name="order" defaultValue={desc ? "desc" : "asc"}>
             <option value="asc">Ascending</option>
             <option value="desc">Descending</option>
-          </select>
-        </label>
+          </Select>
+        </Field>
         <Button type="submit" variant="primary">Apply</Button>
       </form>
 
-      <div className="row">
-        <a className="key" href={`/export/invoices?format=csv&direction=${direction}`}>Export CSV</a>
-      </div>
-
       {shown.length === 0 ? (
-        <p className="muted">No invoices match. Clear the search or the status filter.</p>
+        <Card>
+          <p className="text-muted">No invoices match. Clear the search or the status filter.</p>
+        </Card>
       ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <caption className="sr-only">{direction === "receivable" ? "Invoices from the company" : "Invoices to the company"}</caption>
-            <thead>
-              <tr>
-                <th scope="col">Number</th>
-                <th scope="col">{direction === "receivable" ? "Client" : "Supplier"}</th>
-                <th scope="col" className="num">Amount</th>
-                <th scope="col">Currency</th>
-                <th scope="col">Issued</th>
-                <th scope="col">Due</th>
-                <th scope="col">Status</th>
-                <th scope="col"><span className="sr-only">Actions</span></th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="reveal" style={{ "--i": 3 } as React.CSSProperties}>
+          <Table caption={direction === "receivable" ? "Receivable invoices" : "Payable invoices"}>
+            <THead>
+              <Tr>
+                <Th>Number</Th>
+                <Th>{direction === "receivable" ? "Client" : "Supplier"}</Th>
+                <Th className="text-right">Amount</Th>
+                <Th>Issued</Th>
+                <Th>Due</Th>
+                <Th>Status</Th>
+                <Th><span className="sr-only">Actions</span></Th>
+              </Tr>
+            </THead>
+            <TBody>
               {shown.map((i) => (
-                <tr key={i.id}>
-                  <th scope="row">{i.number}</th>
-                  <td>{i.counterparty_name}</td>
-                  <td className="num">{formatAmount(i.amount_cents)}</td>
-                  <td>{i.currency}</td>
-                  <td>{formatDate(i.issue_date)}</td>
-                  <td>{formatDate(i.due_date)}</td>
-                  <td><StatusStamp status={i.display_status} compact /></td>
-                  <td className="actions">
-                    {i.direction === "receivable" && OPEN.includes(i.display_status) ? (
-                      <form action={remindInvoice}>
-                        <input type="hidden" name="id" value={i.id} />
-                        <input type="hidden" name="returnTo" value={returnTo} />
-                        <Button type="submit" className="key--small">Remind now</Button>
-                      </form>
-                    ) : null}
-                    {i.status === "sent" && !i.is_financed && i.outstanding_cents > 0 ? (
-                      <form action={cancelInvoice}>
-                        <input type="hidden" name="id" value={i.id} />
-                        <input type="hidden" name="returnTo" value={returnTo} />
-                        <Button type="submit" className="key--small">Cancel</Button>
-                      </form>
-                    ) : null}
-                  </td>
-                </tr>
+                <Tr key={i.id}>
+                  <Th scope="row" className="whitespace-nowrap text-left font-medium normal-case tracking-normal text-foreground">{i.number}</Th>
+                  <Td>
+                    <span className="block max-w-56 truncate" title={i.counterparty_name}>{i.counterparty_name}</span>
+                  </Td>
+                  <Td className="whitespace-nowrap text-right">{formatMoney(i.amount_cents, i.currency)}</Td>
+                  <Td className="whitespace-nowrap">{formatDate(i.issue_date)}</Td>
+                  <Td className="whitespace-nowrap">{formatDate(i.due_date)}</Td>
+                  <Td><StatusBadge status={i.display_status} compact /></Td>
+                  <Td className="whitespace-nowrap text-right">
+                    <div className="flex justify-end gap-2">
+                      {i.direction === "receivable" && OPEN.includes(i.display_status) ? (
+                        <form action={remindInvoice}>
+                          <input type="hidden" name="id" value={i.id} />
+                          <input type="hidden" name="returnTo" value={returnTo} />
+                          <Button type="submit" size="sm">Remind now</Button>
+                        </form>
+                      ) : null}
+                      {i.status === "sent" && !i.is_financed && i.outstanding_cents > 0 ? (
+                        <form action={cancelInvoice}>
+                          <input type="hidden" name="id" value={i.id} />
+                          <input type="hidden" name="returnTo" value={returnTo} />
+                          <Button type="submit" size="sm">Cancel</Button>
+                        </form>
+                      ) : null}
+                    </div>
+                  </Td>
+                </Tr>
               ))}
-            </tbody>
-          </table>
+            </TBody>
+          </Table>
         </div>
       )}
-    </main>
+    </div>
   );
 }
 

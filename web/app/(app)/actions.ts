@@ -22,7 +22,7 @@ async function run(data: FormData, work: () => Promise<Outcome>): Promise<never>
     outcome = await work();
   } catch (error) {
     if (!(error instanceof ApiError)) throw error;
-    if (error.status === 401) redirect("/signin");
+    if (error.status === 401) redirect("/login");
     redirect(flash(returnTo, { error: error.message }));
   }
   revalidatePath("/", "layout");
@@ -78,7 +78,7 @@ export async function signOut() {
     if (!(error instanceof ApiError)) throw error; // unreachable backend: sign out here anyway
   }
   await endSession();
-  redirect("/signin");
+  redirect("/login");
 }
 
 export async function signOutEverywhere() {
@@ -89,7 +89,7 @@ export async function signOutEverywhere() {
     if (error.status !== 401) redirect(flash("/account", { error: error.message }));
   }
   await endSession();
-  redirect(flash("/signin", { notice: "You're signed out on every device." }));
+  redirect(flash("/login", { notice: "You're signed out on every device." }));
 }
 
 // ---------------------------------------------------------------- the account page
@@ -125,7 +125,7 @@ export async function linkGoogle() {
     url = await getApi().linkGoogle(returnTo.toString());
   } catch (error) {
     if (!(error instanceof ApiError)) throw error;
-    if (error.status === 401) redirect("/signin");
+    if (error.status === 401) redirect("/login");
     redirect(flash("/account", { error: error.message }));
   }
   redirect(url);

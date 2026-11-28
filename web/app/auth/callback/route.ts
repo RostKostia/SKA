@@ -16,13 +16,13 @@ export async function GET(request: NextRequest) {
 
   if (q.get("auth_error")) {
     const message = q.get("auth_message") || "Google sign-in didn't work. Try again.";
-    return go(flash(linking ? next : "/signin", { error: message }));
+    return go(flash(linking ? next : "/login", { error: message }));
   }
   if (q.get("google") === "linked") {
     return go(flash(next, { notice: "Your Google account is linked. You can now sign in with it." }));
   }
   const code = q.get("login_code");
-  if (!code) return go("/signin");
+  if (!code) return go("/login");
   try {
     const { token } = await getApi().exchangeLoginCode(code);
     const res = go(next);
@@ -30,6 +30,6 @@ export async function GET(request: NextRequest) {
     return res;
   } catch (error) {
     if (!(error instanceof ApiError)) throw error;
-    return go(flash("/signin", { error: error.message }));
+    return go(flash("/login", { error: error.message }));
   }
 }

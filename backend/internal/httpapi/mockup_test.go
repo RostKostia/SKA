@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -12,9 +14,14 @@ import (
 	"github.com/RostKostia/SKA/backend/internal/httpapi"
 )
 
+// The repo no longer ships a mockup, but KERDOS_MOCKUP_DIR still serves one from any folder.
 func TestMockupIsServed(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte(`<!doctype html><script src="app.js"></script>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv := httptest.NewServer((&httpapi.Server{App: &app.App{}, Log: quiet, AuthMode: "dev", MockupDir: "../../../mockup"}).Handler())
+	srv := httptest.NewServer((&httpapi.Server{App: &app.App{}, Log: quiet, AuthMode: "dev", MockupDir: dir}).Handler())
 	defer srv.Close()
 	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 

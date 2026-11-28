@@ -40,7 +40,7 @@ flowchart LR
 
 - **Database:** the business rules live in PostgreSQL views and functions: overdue status, reminders due, the forecast, financing. The API and the tests use the same rules.
 - **Backend:** a Go JSON API. Every outside service sits behind an interface with a mock, so **the demo never depends on a service being up**.
-- **Frontend:** a Next.js app in `web/` that shows what the backend returns. `mockup/` is the original design, now also running on the API, with the demo controls (Skip time, Reset) and the client's pay page.
+- **Frontend:** a Next.js app in `web/` that shows what the backend returns.
 
 ## Quick start
 
@@ -74,8 +74,6 @@ npm run dev
 **The demo:** in the app's Chat, send "Invoice Kostas €120". Then skip 3 days with `curl -X POST localhost:8080/api/demo/skip -d '{"days":3}'` (Andreas gets a firm reminder), ask "Will I go negative?", press "Get €800 now" and accept. `curl -X POST localhost:8080/api/demo/reset` starts the story again.
 
 On Windows PowerShell, several of these commands need small changes: see [Windows (PowerShell)](#windows-powershell) below.
-
-**The clickable mockup on live data:** with the backend running, open http://localhost:8080/mockup/. It has the whole demo in one screen: chat, Skip time, the warning, "Get €800 now", and the client's phone view with "Pay now". Opened as a file, it only shows how to start the API.
 
 No keys are needed: the bank, Jinius, email and chat parsing all have working mocks. Add `ANTHROPIC_API_KEY`, the `SMTP_*` settings or `KERDOS_BANK=boc` with the `BOC_*` settings to switch the real ones on (see `.env.example`).
 
@@ -152,13 +150,13 @@ go test ./internal/httpapi/
 | Database schema, demo data, rules | Done; checked by `db/tests/demo_story.sql` |
 | Backend API (chat, invoices, reminders, forecast, financing, pay page, demo controls) | Prototype; checked by an end-to-end test through the API |
 | Chat parsing | Rule-based, or Claude when a key is set (falls back to the rules on any failure) |
-| Email | Logged, or sent over SMTP (tested with Gmail). Chat and the mockup report what really happened to each email, and failed emails have a Retry button. Emails for cancelled invoices are never sent |
+| Email | Logged, or sent over SMTP (tested with Gmail). Chat reports what really happened to each email, and a failed email can be sent again (`POST /api/messages/{id}/retry`). Emails for cancelled invoices are never sent |
 | BoC open banking (consent, balance, transactions, matching payments to invoices) | Built with `KERDOS_BANK=boc` and tested against the BoC documentation's samples; not yet run against the live sandbox. How to connect: [backend/README.md](backend/README.md#connecting-the-boc-sandbox) |
 | Jinius e-invoicing | Mock: no public API docs yet, access to be confirmed with the organisers |
 | "Pay now" through BoC, financing offers | Simulated |
 | Next.js frontend (`web/`): overview, chat, invoices, debtors, forecast and financing, reminders | Built on the backend API; see `web/README.md` |
 | Google Sheets sync, XLSX export | Not built yet. The web app's Invoices page exports CSV |
-| Accounts: email and password or Google sign-in, owner and invited members, account and team pages | Built (`KERDOS_AUTH=accounts`), in the web app and the mockup; Google sign-in needs a Google client ID (see [backend/README.md](backend/README.md#accounts-and-sign-in)) |
+| Accounts: email and password or Google sign-in, owner and invited members, account and team pages | Built (`KERDOS_AUTH=accounts`), in the web app; Google sign-in needs a Google client ID (see [backend/README.md](backend/README.md#accounts-and-sign-in)) |
 | Budgets, and the client's pay page and a bank connection page in the frontend | Not built yet |
 
 All names, amounts and dates in the demo are sample data.
@@ -169,8 +167,7 @@ All names, amounts and dates in the demo are sample data.
 backend/    Go API: see backend/README.md
 web/        Next.js frontend: see web/README.md
 db/         PostgreSQL schema (migrations), sample data, demo test: see db/README.md
-docs/       data-model.md (data model and team decisions), superpowers/ (mockup and frontend specs)
-mockup/     clickable mockup on the API, served at http://localhost:8080/mockup/ (logic.js and data.js are the original rules, kept for reference)
+docs/       data-model.md (data model and team decisions), superpowers/ (design specs and plans)
 KERDOS_BRIEF.md   project brief
 .env.example      every setting, with comments (copy to .env, never commit .env)
 ```

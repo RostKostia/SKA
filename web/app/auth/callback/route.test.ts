@@ -42,7 +42,7 @@ describe("GET /auth/callback", () => {
 
   it("shows Google's error on the sign-in page, or on the account page when linking", async () => {
     let to = location(await call("auth_error=invite_required&auth_message=Ask+the+owner"));
-    expect([to.pathname, to.searchParams.get("error")]).toEqual(["/signin", "Ask the owner"]);
+    expect([to.pathname, to.searchParams.get("error")]).toEqual(["/login", "Ask the owner"]);
     to = location(await call("auth_error=google_in_use&auth_message=In+use&next=%2Faccount&link=1"));
     expect([to.pathname, to.searchParams.get("error")]).toEqual(["/account", "In use"]);
     expect(backend.codes).toEqual([]);

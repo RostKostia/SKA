@@ -434,7 +434,7 @@ func (a *App) GoogleStart(ctx context.Context, purpose, userID, inviteToken, ret
 // the return_to page with ?login_code=… (sign-in), ?google=linked (link), or ?auth_error=…
 // and a readable auth_message.
 func (a *App) GoogleCallback(ctx context.Context, state, code, googleErr string) string {
-	fallback := a.PublicURL + "/signin"
+	fallback := a.PublicURL + "/login"
 	var purpose, userID, inviteID, verifier, returnTo string
 	err := errors.New("no state")
 	if auth.ValidToken(state) {

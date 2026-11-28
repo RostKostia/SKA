@@ -30,7 +30,7 @@ npm run build && npm start
 | `/forecast` | Balance chart and headline from the backend, what it counts, "Get €800 now" with the fee shown before you accept |
 | `/reminders` | How automatic reminders go out, the email templates, and every email sent |
 | `/design` | The design kit |
-| `/signin` | Email and password, or Continue with Google. Offers "Create the owner account" while nobody has one |
+| `/login` | Email and password, or Continue with Google. Offers "Create the owner account" while nobody has one |
 | `/signup` | The owner's account (first time only), or joining from an invitation link (`?invite=…`): the address is fixed to the invited one |
 | `/account` | Name and email, password (or a first password for a Google-only account), link or disconnect Google, sign out, sign out on every device |
 | `/team` | Owner only: members, invite by email (the link is also shown to copy), open invitations with Invite again and Cancel, remove a member |
@@ -38,7 +38,7 @@ npm run build && npm start
 
 ## Signing in
 
-With the backend on `KERDOS_AUTH=accounts`, every page needs a session. Signing in stores the backend's session token in this app's own `kerdos_session` cookie (httpOnly, SameSite=Lax), which the server forwards to the backend on every call. A 401 from the backend sends the browser to `/signin`. With `KERDOS_AUTH=dev` there is no sign-in: `/signin` says so, and everything works as the owner.
+With the backend on `KERDOS_AUTH=accounts`, every page needs a session. Signing in stores the backend's session token in this app's own `kerdos_session` cookie (httpOnly, SameSite=Lax), which the server forwards to the backend on every call. A 401 from the backend sends the browser to `/login`. With `KERDOS_AUTH=dev` there is no sign-in: `/login` says so and offers "Continue to the demo", and everything works as the owner.
 
 ## Not built yet
 
@@ -47,4 +47,4 @@ The backend has no endpoint yet for: Google Sheets sync, Excel export, budgets a
 The backend is ready, but the web app has no page or button yet for:
 - the client's pay page: `/pay/{token}`, using `GET` and `POST /api/pay/{token}`
 - connecting the bank: `/settings`, using `POST /api/bank/connect` and `POST /api/bank/sync`. BoC consent returns to `/settings?bank=connected` or `?bank=error`
-- retrying a failed email: `POST /api/messages/{id}/retry`. The mockup has a Retry button
+- retrying a failed email: `POST /api/messages/{id}/retry`

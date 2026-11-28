@@ -97,7 +97,7 @@ All bodies are JSON. Money is in integer cents (`*_cents`) and dates are `YYYY-M
 
 Every email is a row in `outbound_messages`, which is both the log and the send queue. Just before sending, Kerdos checks the invoice again: an email for a cancelled invoice is never sent, and neither is a reminder for an invoice that has been paid or financed. Those rows become `cancelled`, with the reason in `error`.
 
-Chat and the mockup only say an email went out once the mail server accepted it. If it failed, the reply says why (a refused Gmail login, for example) and the mockup shows a Retry button. A failed email stays `failed` until you retry it; nothing resends it on its own.
+Chat only says an email went out once the mail server accepted it. If it failed, the reply says why (a refused Gmail login, for example), and `POST /api/messages/{id}/retry` sends it again. A failed email stays `failed` until you retry it; nothing resends it on its own.
 
 ## Accounts and sign-in
 

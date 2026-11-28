@@ -23,7 +23,7 @@ export async function signIn(data: FormData) {
     ({ token } = await getApi().logIn(email, String(data.get("password") ?? "")));
   } catch (error) {
     if (!(error instanceof ApiError)) throw error;
-    back("/signin", { error: error.message, email, next: next === "/" ? "" : next });
+    back("/login", { error: error.message, email, next: next === "/" ? "" : next });
   }
   await startSession(token);
   redirect(next);
@@ -49,7 +49,7 @@ export async function signUp(data: FormData) {
 export async function continueWithGoogle(data: FormData) {
   const next = safePath(data.get("next"));
   const invite = text(data, "invite");
-  const from = invite ? "/signup" : "/signin";
+  const from = invite ? "/signup" : "/login";
   let url: string;
   try {
     const returnTo = new URL("/auth/callback", await currentWebOrigin());

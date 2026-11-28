@@ -71,7 +71,7 @@ flowchart LR
 
 - **Database:** the business rules live in PostgreSQL views and functions: overdue status, reminders due, the forecast, financing. The API and the tests use the same rules. Details: [`db/README.md`](db/README.md); the data model and the team decisions: [`docs/data-model.md`](docs/data-model.md).
 - **Backend:** a Go JSON API that owns all logic and every integration. Each outside service sits behind an interface with a mock, so **the demo never depends on a service being up**. Its endpoint table in [`backend/README.md`](backend/README.md) is the contract; `web/lib/api/types.ts` mirrors its JSON.
-- **Frontend:** a Next.js app in `web/` that only shows what the backend returns ([`web/README.md`](web/README.md)). `mockup/` is the original design, now also running on the API, with the demo controls (Skip time, Reset) and the client's pay page.
+- **Frontend:** a Next.js app in `web/` that only shows what the backend returns ([`web/README.md`](web/README.md)).
 - **Settings:** only through environment variables; every one is in [`.env.example`](.env.example). No secrets in the repo.
 
 ## Quick start
@@ -113,8 +113,6 @@ On Windows PowerShell, several of these commands need small changes: see [Window
 ### Run the demo
 
 In the app's Chat, send "Invoice Kostas €120". Then skip 3 days with `curl -X POST localhost:8080/api/demo/skip -d '{"days":3}'` (Andreas gets a firm reminder), then pay Kostas's invoice from its link ("Pay now"). `curl -X POST localhost:8080/api/demo/reset` starts the story again. Every step as an API call: [`backend/README.md`](backend/README.md#the-demo-through-the-api).
-
-**The clickable mockup on live data:** with the backend running, open http://localhost:8080/mockup/. It has the whole demo in one screen: chat, Skip time, the warning, and the client's phone view with "Pay now". Opened as a file, it only shows how to start the API.
 
 ## Windows (PowerShell)
 
@@ -189,7 +187,7 @@ Every integration has a mock behind the same interface. If an API blocks progres
 | **Claude** | Reads chat messages ("Invoice Kostas €120") through tool use | Works with a key. Any failure falls back to the rule-based parser | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` |
 | **Bank of Cyprus** PSD2 sandbox ([portal](https://developer.bankofcyprus.com)) | Consent, accounts, balance, statement; incoming payments matched to invoices by number | App "Kerdos" registered, app token works. The client is tested against the documentation's samples. The consent screen in the sandbox stops at the OTP step, so a live sync hasn't run yet (question for the BoC mentors). How to connect: [backend/README.md](backend/README.md#connecting-the-boc-sandbox). Use `KERDOS_BANK=mock` for the demo. The Payments API ("pay by bank") is planned for "Pay now" | `KERDOS_BANK=boc`, `BOC_*` |
 | **Jinius** (BoC B2B: e-invoicing, payments) | Sending the e-invoice with a payment link | Mock: the payment link is Kerdos's own pay page. Registration at https://b2b.integration.platform.cy is submitted and waiting for approval; then the client id and secret come from Settings → Developer. The API has `/v3/invoices` and `/v3/remittances` | `JINIUS_API_KEY` (not used yet) |
-| **Email** | Invoice copies, reminders, receipts, the owner's summary | Real over SMTP (tested with Gmail and an app password), or only logged when `SMTP_HOST` is empty. Chat and the mockup report what really happened to each email; a failed one says why and has a Retry button, and stays failed until you retry it. Nothing is emailed about a cancelled invoice, and paid invoices are never chased | `SMTP_*` |
+| **Email** | Invoice copies, reminders, receipts, the owner's summary | Real over SMTP (tested with Gmail and an app password), or only logged when `SMTP_HOST` is empty. Chat reports what really happened to each email; a failed one says why, and stays failed until it is retried (`POST /api/messages/{id}/retry`). Nothing is emailed about a cancelled invoice, and paid invoices are never chased | `SMTP_*` |
 | **"Pay now"** | The client pays the invoice from its link | Simulated: no signed BoC payment initiation yet | |
 
 ## Status
@@ -199,9 +197,9 @@ Every integration has a mock behind the same interface. If an API blocks progres
 | Database schema, demo data, rules | Done; checked by `db/tests/demo_story.sql` |
 | Backend API (chat, invoices, reminders, forecast, financing, pay page, demo controls) | Prototype; checked by an end-to-end test through the API |
 | Next.js frontend (`web/`): overview, chat, invoices in both directions with CSV export, debtors, forecast and financing, reminders | Built on the backend API |
-| Clickable mockup (`mockup/`) | Runs the whole demo on the API |
 | Google Sheets sync, XLSX export | Not built yet. The web app's Invoices page exports CSV |
-| Google sign-in, budgets, editing reminder rules and templates, Claude-drafted reminders | Not built yet (the backend runs with `KERDOS_AUTH=dev`) |
+| Accounts: email and password or Google sign-in, an owner and invited members, account and team pages | Built; on with `KERDOS_AUTH=accounts` (the default, `dev`, has no sign-in) |
+| Budgets, editing reminder rules and templates, Claude-drafted reminders | Not built yet |
 | The client's pay page, a bank connection page and a Retry button for failed emails in the web app | Not built yet; the backend endpoints are ready (see [`web/README.md`](web/README.md)) |
 
 All names, amounts and dates in the demo are sample data.
@@ -229,7 +227,6 @@ backend/    Go API. backend/README.md: settings, the endpoint table (the API con
 web/        Next.js frontend. web/README.md: run, pages, what is not built yet
 db/         PostgreSQL schema (migrations), sample data, demo test. db/README.md: setup, conventions, what the database computes, "Skip time"
 docs/       data-model.md: the data model and the team decisions behind it
-mockup/     clickable mockup on the API, served at http://localhost:8080/mockup/ (logic.js and data.js are the original rules, kept for reference)
 .env.example      every setting, with comments (copy to .env, never commit .env)
 ```
 

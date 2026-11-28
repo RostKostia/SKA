@@ -1,31 +1,40 @@
-import { Suspense } from "react";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import { Suspense, type CSSProperties } from "react";
 import { inviteMember, removeMember, revokeInvite } from "@/app/(app)/actions";
+import { Field } from "@/components/AuthCard";
 import { apiErrorView } from "@/components/ErrorPanel";
 import { PageFallback } from "@/components/PageFallback";
+import { PageHeader } from "@/components/PageHeader";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { TBody, THead, Table, Td, Th, Tr } from "@/components/ui/Table";
 import { getApi } from "@/lib/api";
 import type { Invite } from "@/lib/api/types";
+import { roleLabel } from "@/lib/account";
 import { formatDate } from "@/lib/format";
+import type { Tone } from "@/lib/status";
 import { INVITE_LINK_COOKIE } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Team · Kerdos" };
 
+const step = (i: number) => ({ "--i": i }) as CSSProperties;
 const day = (iso: string | null) => (iso ? formatDate(iso.slice(0, 10)) : "Never");
 
-function emailState(invite: Invite) {
+function emailState(invite: Invite): { label: string; tone: Tone } {
   switch (invite.email_status) {
     case "sent":
-      return "Email sent";
+      return { label: "Email sent", tone: "success" };
     case "failed":
-      return `Email failed: ${invite.email_error}`;
+      return { label: `Email failed: ${invite.email_error}`, tone: "danger" };
     case "cancelled":
-      return "Email not sent";
+      return { label: "Email not sent", tone: "neutral" };
     case "queued":
-      return "Email on its way";
+      return { label: "Email on its way", tone: "info" };
     default:
-      return "No email";
+      return { label: "No email", tone: "neutral" };
   }
 }
 
@@ -50,119 +59,131 @@ async function TeamPageContent() {
   const fresh = await readNewLink();
 
   return (
-    <main className="shell__main">
-      <h1>Team</h1>
-      <p className="muted">Everyone here works on the same business. Invite people by email: they create their account from the link in the invitation.</p>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+      <PageHeader
+        title="Team"
+        description="Everyone here works on the same business. Invite people by email: they create their account from the link in the invitation."
+      />
 
-      <section className="slab stack account__section" aria-labelledby="invite-title">
-        <h2 id="invite-title">Invite someone</h2>
-        <form action={inviteMember} className="toolbar">
-          <input type="hidden" name="returnTo" value="/team" />
-          <label className="stack auth__label">
-            Email
-            <input className="field" name="email" type="email" required />
-          </label>
-          <label className="stack auth__label">
-            Name (optional)
-            <input className="field" name="name" maxLength={100} />
-          </label>
-          <Button type="submit" variant="primary">Send invitation</Button>
-        </form>
-        {fresh ? (
-          <div className="stack">
-            <label className="stack auth__label">
-              Invitation link for {fresh.email} (works for 7 days, once)
-              <input className="field" readOnly value={fresh.link} />
-            </label>
-            <p className="muted auth__hint">Anyone with this link can join as {fresh.email}, so only send it to them.</p>
-          </div>
-        ) : null}
+      <Card className="reveal max-w-3xl" style={step(1)} aria-labelledby="invite-title">
+        <CardHeader>
+          <CardTitle id="invite-title">Invite someone</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={inviteMember} className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <input type="hidden" name="returnTo" value="/team" />
+            <Field label="Email">
+              <Input name="email" type="email" required />
+            </Field>
+            <Field label="Name (optional)">
+              <Input name="name" maxLength={100} />
+            </Field>
+            <Button type="submit" variant="primary">Send invitation</Button>
+          </form>
+          {fresh ? (
+            <div className="grid gap-1.5 rounded-md border border-border bg-background p-3">
+              <Field label={`Invitation link for ${fresh.email}`} hint={`Works once, for 7 days. Anyone with it can join as ${fresh.email}, so only send it to them.`}>
+                <Input readOnly value={fresh.link} className="font-mono text-xs" />
+              </Field>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <section className="reveal grid gap-3" style={step(2)} aria-labelledby="members-title">
+        <h2 id="members-title" className="text-base font-semibold tracking-tight">Members</h2>
+        <Table caption="Members of the business">
+          <THead>
+            <Tr>
+              <Th>Name</Th>
+              <Th>Email</Th>
+              <Th>Role</Th>
+              <Th>Signs in with</Th>
+              <Th>Last sign-in</Th>
+              <Th className="text-right"><span className="sr-only">Actions</span></Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {team.members.map((m) => (
+              <Tr key={m.id}>
+                <Td className="font-medium">
+                  {m.name}
+                  {m.you ? <span className="text-muted"> (you)</span> : null}
+                </Td>
+                <Td className="whitespace-nowrap">{m.email}</Td>
+                <Td>
+                  <Badge tone={m.role === "admin" ? "info" : "neutral"}>{roleLabel(m.role)}</Badge>
+                </Td>
+                <Td>{[m.has_password && "Password", m.google_linked && "Google"].filter(Boolean).join(", ")}</Td>
+                <Td className="whitespace-nowrap">{day(m.last_login_at)}</Td>
+                <Td className="text-right">
+                  {m.you ? null : (
+                    <form action={removeMember}>
+                      <input type="hidden" name="returnTo" value="/team" />
+                      <input type="hidden" name="id" value={m.id} />
+                      <input type="hidden" name="name" value={m.name} />
+                      <Button type="submit" size="sm" variant="danger" aria-label={`Remove ${m.name}`}>Remove</Button>
+                    </form>
+                  )}
+                </Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
       </section>
 
-      <section className="stack" aria-labelledby="members-title">
-        <h2 id="members-title">Members</h2>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Email</th>
-                <th scope="col">Role</th>
-                <th scope="col">Signs in with</th>
-                <th scope="col">Last sign-in</th>
-                <th scope="col" className="actions"><span className="sr-only">Actions</span></th>
-              </tr>
-            </thead>
-            <tbody>
-              {team.members.map((m) => (
-                <tr key={m.id}>
-                  <th scope="row">{m.name}{m.you ? " (you)" : ""}</th>
-                  <td>{m.email}</td>
-                  <td>{m.role === "admin" ? "Owner" : "Member"}</td>
-                  <td>{[m.has_password && "Password", m.google_linked && "Google"].filter(Boolean).join(", ")}</td>
-                  <td>{day(m.last_login_at)}</td>
-                  <td className="actions">
-                    {m.you ? null : (
-                      <form action={removeMember}>
-                        <input type="hidden" name="returnTo" value="/team" />
-                        <input type="hidden" name="id" value={m.id} />
-                        <input type="hidden" name="name" value={m.name} />
-                        <Button type="submit" className="key--small" aria-label={`Remove ${m.name}`}>Remove</Button>
-                      </form>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="stack" aria-labelledby="invites-title">
-        <h2 id="invites-title">Open invitations</h2>
+      <section className="reveal grid gap-3" style={step(3)} aria-labelledby="invites-title">
+        <h2 id="invites-title" className="text-base font-semibold tracking-tight">Open invitations</h2>
         {team.invites.length === 0 ? (
-          <p className="muted">None.</p>
+          <p className="text-sm text-muted">None.</p>
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th scope="col">Invited</th>
-                  <th scope="col">Invited by</th>
-                  <th scope="col">Expires</th>
-                  <th scope="col">Invitation email</th>
-                  <th scope="col" className="actions"><span className="sr-only">Actions</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {team.invites.map((inv) => (
-                  <tr key={inv.id}>
-                    <th scope="row">{inv.name ? `${inv.name} · ${inv.email}` : inv.email}</th>
-                    <td>{inv.invited_by ?? ""}</td>
-                    <td>{inv.expired ? "Expired" : day(inv.expires_at)}</td>
-                    <td>{emailState(inv)}</td>
-                    <td className="actions">
-                      <form action={inviteMember}>
-                        <input type="hidden" name="returnTo" value="/team" />
-                        <input type="hidden" name="email" value={inv.email} />
-                        <input type="hidden" name="name" value={inv.name ?? ""} />
-                        <Button type="submit" className="key--small" aria-label={`Invite ${inv.email} again`}>Invite again</Button>
-                      </form>
-                      <form action={revokeInvite}>
-                        <input type="hidden" name="returnTo" value="/team" />
-                        <input type="hidden" name="id" value={inv.id} />
-                        <input type="hidden" name="email" value={inv.email} />
-                        <Button type="submit" className="key--small" aria-label={`Cancel the invitation for ${inv.email}`}>Cancel</Button>
-                      </form>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table caption="Open invitations">
+            <THead>
+              <Tr>
+                <Th>Invited</Th>
+                <Th>Invited by</Th>
+                <Th>Expires</Th>
+                <Th>Invitation email</Th>
+                <Th className="text-right"><span className="sr-only">Actions</span></Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {team.invites.map((inv) => {
+                const email = emailState(inv);
+                return (
+                  <Tr key={inv.id}>
+                    <Td className="font-medium">
+                      {inv.name ? <>{inv.name} <span className="text-muted">· {inv.email}</span></> : inv.email}
+                    </Td>
+                    <Td>{inv.invited_by ?? ""}</Td>
+                    <Td className="whitespace-nowrap">{inv.expired ? <Badge tone="warning">Expired</Badge> : day(inv.expires_at)}</Td>
+                    <Td>
+                      <Badge tone={email.tone} className="max-w-64 truncate">{email.label}</Badge>
+                    </Td>
+                    <Td>
+                      <div className="flex justify-end gap-2">
+                        <form action={inviteMember}>
+                          <input type="hidden" name="returnTo" value="/team" />
+                          <input type="hidden" name="email" value={inv.email} />
+                          <input type="hidden" name="name" value={inv.name ?? ""} />
+                          <Button type="submit" size="sm" aria-label={`Invite ${inv.email} again`}>Invite again</Button>
+                        </form>
+                        <form action={revokeInvite}>
+                          <input type="hidden" name="returnTo" value="/team" />
+                          <input type="hidden" name="id" value={inv.id} />
+                          <input type="hidden" name="email" value={inv.email} />
+                          <Button type="submit" size="sm" aria-label={`Cancel the invitation for ${inv.email}`}>Cancel</Button>
+                        </form>
+                      </div>
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </TBody>
+          </Table>
         )}
       </section>
-    </main>
+    </div>
   );
 }
 

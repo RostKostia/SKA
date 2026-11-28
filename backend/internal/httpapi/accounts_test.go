@@ -496,12 +496,12 @@ func TestGoogleStartNeverLeavesTheSite(t *testing.T) {
 	if res.StatusCode != http.StatusBadRequest || res.Header.Get("Location") != "" {
 		t.Fatalf("status %d, location %q", res.StatusCode, res.Header.Get("Location"))
 	}
-	res, err = noFollow.Get(srv.URL + "/api/auth/google/start?return_to=" + url.QueryEscape("http://front/signin"))
+	res, err = noFollow.Get(srv.URL + "/api/auth/google/start?return_to=" + url.QueryEscape("http://front/login"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	res.Body.Close()
-	if loc := res.Header.Get("Location"); res.StatusCode != http.StatusFound || !strings.HasPrefix(loc, "http://front/signin?") || !strings.Contains(loc, "auth_error=google_off") {
+	if loc := res.Header.Get("Location"); res.StatusCode != http.StatusFound || !strings.HasPrefix(loc, "http://front/login?") || !strings.Contains(loc, "auth_error=google_off") {
 		t.Fatalf("status %d, location %q", res.StatusCode, loc)
 	}
 }
