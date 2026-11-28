@@ -1,4 +1,6 @@
 import type {
+  Account,
+  AuthStatus,
   ChatMessage,
   Dashboard,
   Debtor,
@@ -7,13 +9,38 @@ import type {
   Invoice,
   Message,
   Offer,
+  Invite,
+  InviteInfo,
   ReminderPolicy,
-  User,
+  SignedIn,
+  Team,
 } from "./types";
 
 // The Go backend's API (backend/README.md, "Endpoints"). Every backend call goes through this.
 export interface ApiClient {
-  getMe(): Promise<User>;
+  // Signing in. These work without a session.
+  getAuthStatus(): Promise<AuthStatus>;
+  signUp(input: { name: string; email: string; password: string; invite?: string }): Promise<SignedIn>;
+  logIn(email: string, password: string): Promise<SignedIn>;
+  logOut(): Promise<void>;
+  exchangeLoginCode(code: string): Promise<SignedIn>;
+  getInvite(token: string): Promise<InviteInfo>;
+  startGoogle(returnTo: string, invite?: string): Promise<string>;
+
+  // The account page.
+  getMe(): Promise<Account>;
+  updateMe(input: { name?: string; email?: string; current_password?: string }): Promise<Account>;
+  changePassword(currentPassword: string, newPassword: string): Promise<void>;
+  linkGoogle(returnTo: string): Promise<string>;
+  unlinkGoogle(): Promise<Account>;
+  logOutEverywhere(): Promise<void>;
+
+  // The team (owner only).
+  getTeam(): Promise<Team>;
+  invite(email: string, name?: string): Promise<{ invite: Invite; link: string }>;
+  revokeInvite(id: string): Promise<void>;
+  removeMember(id: string): Promise<void>;
+
   getDashboard(): Promise<Dashboard>;
 
   listChat(): Promise<ChatMessage[]>;

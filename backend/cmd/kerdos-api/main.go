@@ -9,6 +9,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -19,6 +20,7 @@ import (
 	"github.com/RostKostia/SKA/backend/internal/app"
 	"github.com/RostKostia/SKA/backend/internal/boc"
 	"github.com/RostKostia/SKA/backend/internal/config"
+	"github.com/RostKostia/SKA/backend/internal/google"
 	"github.com/RostKostia/SKA/backend/internal/httpapi"
 	"github.com/RostKostia/SKA/backend/internal/jinius"
 	"github.com/RostKostia/SKA/backend/internal/mail"
@@ -34,6 +36,9 @@ func main() {
 
 func run(log *slog.Logger) error {
 	cfg := config.Load()
+	if cfg.AuthMode != "dev" && cfg.AuthMode != "accounts" {
+		return errors.New(`KERDOS_AUTH must be "dev" or "accounts"`)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -71,11 +76,21 @@ func run(log *slog.Logger) error {
 		}
 		a.BoC = &boc.Client{BaseURL: cfg.BoCBaseURL, ClientID: cfg.BoCClientID, ClientSecret: cfg.BoCClientSecret, RedirectURI: cfg.BoCRedirectURI, HTTP: httpClient}
 	}
+	if cfg.GoogleClientID != "" {
+		if cfg.GoogleClientSecret == "" {
+			return errors.New("GOOGLE_CLIENT_ID is set but GOOGLE_CLIENT_SECRET is not")
+		}
+		a.Google = &google.Client{ClientID: cfg.GoogleClientID, ClientSecret: cfg.GoogleClientSecret, RedirectURI: cfg.GoogleRedirectURI,
+			AuthURL: cfg.GoogleAuthURL, TokenURL: cfg.GoogleTokenURL, HTTP: httpClient}
+	}
+	// A Google sign-in may return to the frontend or to this server (the mockup).
+	port := portOf(cfg.HTTPAddr)
+	a.ReturnOrigins = []string{originOf(cfg.PublicURL), originOf(cfg.GoogleRedirectURI), "http://localhost" + port, "http://127.0.0.1" + port}
 	parser := "rules"
 	if cfg.AnthropicAPIKey != "" {
 		parser = "claude (" + cfg.AnthropicModel + ")"
 	}
-	log.Info("kerdos-api starting", "addr", cfg.HTTPAddr, "bank", cfg.BankMode, "mailer", a.Mailer.Provider(), "parser", parser, "demo", cfg.Demo, "auth", cfg.AuthMode)
+	log.Info("kerdos-api starting", "addr", cfg.HTTPAddr, "bank", cfg.BankMode, "mailer", a.Mailer.Provider(), "parser", parser, "demo", cfg.Demo, "auth", cfg.AuthMode, "google", a.Google != nil)
 
 	mockupDir := ""
 	if cfg.MockupDir != "off" {
@@ -104,6 +119,15 @@ func run(log *slog.Logger) error {
 	shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdown)
+}
+
+// originOf turns "http://localhost:3000/x" into "http://localhost:3000".
+func originOf(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
 }
 
 // portOf turns ":8080" or "127.0.0.1:8080" into ":8080" for the log line.

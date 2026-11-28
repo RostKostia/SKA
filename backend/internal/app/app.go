@@ -16,6 +16,7 @@ import (
 
 	"github.com/RostKostia/SKA/backend/internal/ai"
 	"github.com/RostKostia/SKA/backend/internal/boc"
+	"github.com/RostKostia/SKA/backend/internal/google"
 	"github.com/RostKostia/SKA/backend/internal/jinius"
 	"github.com/RostKostia/SKA/backend/internal/mail"
 )
@@ -26,11 +27,15 @@ type App struct {
 	Parser    ai.Parser
 	Deliverer jinius.Deliverer
 	Mailer    mail.Mailer
-	BoC       *boc.Client // nil when KERDOS_BANK=mock
-	PublicURL string      // the frontend, for absolute pay links in emails
-	Demo      bool        // enables skip time and reset
-	SeedFile  string
-	FeeBP     int64 // sample fee on simulated financing offers, in basis points
+	BoC       *boc.Client    // nil when KERDOS_BANK=mock
+	Google    *google.Client // nil when GOOGLE_CLIENT_ID is unset: no "Continue with Google"
+	// ReturnOrigins are where a Google sign-in may send the browser back to: the frontend and
+	// this server (the mockup), as scheme://host[:port].
+	ReturnOrigins []string
+	PublicURL     string // the frontend, for absolute pay links in emails
+	Demo          bool   // enables skip time and reset
+	SeedFile      string
+	FeeBP         int64 // sample fee on simulated financing offers, in basis points
 
 	kick chan struct{}
 }

@@ -24,12 +24,12 @@ Sources: the project brief (now in `project-description.md`), the mockup in `moc
 
 ## In the database
 
-Where each entity lives in `db/migrations/000001_init.up.sql`, and where the schema differs from the sections below.
+Where each entity lives in `db/migrations/000001_init.up.sql` (and `000002_accounts.up.sql` for sign-in), and where the schema differs from the sections below.
 
 | Logical entity | Table or object | Difference |
 |---|---|---|
 | Business | `company` (one row) | No tenancy. VAT is stored as a percent |
-| User | `users`, `google_tokens`, `sessions` | Google sign-in; tokens encrypted, sessions hashed |
+| User | `users`, `google_tokens`, `sessions`, `invites`, `oauth_states`, `login_codes` | Sign in with a password (`password_hash`), Google (`google_sub`), or both. The first account is the owner (`role` admin); the owner invites the rest (`invites`, tokens hashed). `disabled_at` marks a removed member. Sessions hashed |
 | Client | `counterparties` | Covers suppliers too. `avg_days_late` is the view `counterparty_payment_stats`, so it is computed rather than cached |
 | Invoice, InvoiceLine | `invoices`, `invoice_lines` | `direction` is `receivable` or `payable`, so bills you owe (rent, insurance) are invoices too. Line `net_cents` and `vat_cents` are generated columns. "Financed" is `invoices.financed_by_offer_id`. The display status is in the view `invoice_overview` |
 | Payment | `payments` | `received_on` is a business date. A trigger marks the invoice paid and cancels queued reminders |

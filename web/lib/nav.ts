@@ -1,6 +1,7 @@
-import { Bell, FileText, LayoutDashboard, MessageSquare, TrendingUp, Users, type LucideIcon } from "lucide-react";
+import { Bell, FileText, LayoutDashboard, MessageSquare, TrendingUp, UserCog, Users, type LucideIcon } from "lucide-react";
 
 export const ACCOUNT_HREF = "/account";
+export const SIGN_IN_HREF = "/login";
 
 export const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
@@ -10,3 +11,6 @@ export const NAV_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/forecast", label: "Forecast", icon: TrendingUp },
   { href: "/reminders", label: "Reminders", icon: Bell },
 ];
+
+// Only the owner sees the team page.
+export const TEAM_ITEM = { href: "/team", label: "Team", icon: UserCog };

@@ -60,5 +60,8 @@ CSS only, per the LottieFiles motion-design principles: motion has a purpose, is
 
 ## Login and account
 
-- `/login` is a real page but does not authenticate: the backend only has dev auth (`KERDOS_AUTH=dev`) and no Google sign-in endpoint. It offers "Continue to the demo" and a disabled "Continue with Google" with the note that it is not enabled on this server yet. It shows no fake sign-in.
-- `/account` shows name, email and role from `getMe()`. There is no sign-out or edit control because the backend has none. It links to `/login`.
+- `/login` and `/signup` sit outside the shell, in one centred `AuthCard` (brand, title, one line). "Continue with Google" is a quiet button above the form, an `OrDivider` between them, and the main action is the one primary button. Backend messages show in the card through `FlashBanner`.
+- With `KERDOS_AUTH=dev` there is no sign-in: `/login` says so and offers "Continue to the demo". With `KERDOS_AUTH=accounts` it signs in for real (password or Google), and any 401 lands here.
+- `/account` is a stack of `Card`s: who you are (avatar, role badge, how you sign in), name and email, password, Google, signing out. "Sign out on every device" is the only `danger` button.
+- `/team` is owner only and appears in the nav as "Team" just for the owner. Invite form in a `Card`, then members and open invitations in `Table`s with `Badge`s for role and email status. Removing a member is a small `danger` button.
+- Roles read "Owner" and "Member" (`lib/account.ts` `roleLabel`), never the backend's `admin` and `user`.

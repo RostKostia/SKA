@@ -11,7 +11,7 @@ KERDOS_DB_PASSWORD=<choose a password>
 KERDOS_DB_PORT=5432
 ```
 
-`KERDOS_DB_PORT` is optional (default 5432). Set it to 5433 when another PostgreSQL already holds 5432 on your computer, and use the same port in `KERDOS_DATABASE_URL`. The database listens on `127.0.0.1` only.
+`KERDOS_DB_PORT` is optional (default 5432). The database listens on `127.0.0.1` only.
 
 Run from the repo root:
 
@@ -24,6 +24,9 @@ docker compose -f db/compose.yaml --env-file db/.env exec -T db \
   psql -U kerdos -d kerdos -v ON_ERROR_STOP=1 < db/tests/demo_story.sql                   # check the demo story
 ```
 
+**Database already set up before 28 Nov?** Run the `migrate up` command again. It adds `000002_accounts` (sign-in) and keeps your data.
+
+On Windows PowerShell, see [Windows (PowerShell)](../README.md#windows-powershell) in the main README: commands with `<` need `cmd /c`, and `curl` needs `Invoke-RestMethod` or `curl.exe`.
 On Windows PowerShell, see [Windows (PowerShell)](../project-description.md#windows-powershell) in the project description: commands with `<` need `cmd /c`, and `curl` needs `Invoke-RestMethod` or `curl.exe`.
 
 The last command walks the whole 2-minute demo and the safety rules against the sample data, prints one `ok` line per check and ends with `ALL DEMO STORY CHECKS PASSED`. It runs in a transaction that is rolled back, so it changes nothing.
@@ -50,6 +53,7 @@ Reset to empty: `docker compose -f db/compose.yaml --env-file db/.env down -v` (
 - `invoices.status` is `draft`, `sent`, `paid` or `cancelled`. "Overdue", "financed" and "partially paid" are derived: read `invoice_overview.display_status`.
 - Chat invoices are sent at once (team decision): `draft` only lasts while the send to Jinius is in flight, or after it failed.
 - `outbound_messages` is the send log and the job queue for every email: invoice delivery, nudges before the due date, overdue reminders, receipts, the owner's summary and budget alerts. Workers claim `queued` rows with `FOR UPDATE SKIP LOCKED`; `dedupe_key` makes automated sends idempotent; an overdue reminder number can only be live once per invoice. `status` is `queued`, `sent`, `failed` or `cancelled`. Right before sending, the backend checks the invoice again. If the invoice was cancelled, or a reminder's invoice was paid or financed in the meantime, the row becomes `cancelled`, with the reason in `error`. A `failed` row is sent again only when someone retries it.
+- **Accounts** (migration 2): a user signs in with `password_hash` (PBKDF2), a Google account (`google_sub`), or both. `disabled_at` marks a member the owner removed. `invites` hold hashed invitation tokens (at most one open invitation per address); `oauth_states` and `login_codes` are short-lived steps of Google sign-in. The seed adds a placeholder owner with no way to sign in; the first account created takes it over. "Reset demo" keeps all of these.
 - Google tokens are stored encrypted by the backend (`key_version` supports key rotation). Session tokens are stored as hashes. The BoC app token is not stored (it is per app and lasts 60 minutes); a `bank_connections` row holds the subscription (the owner's consent).
 - Receivable numbers come from `next_invoice_number(year)`, e.g. `KRD-2026-0001`. Numbers are never reused; a wrong invoice is cancelled and a new one issued.
 

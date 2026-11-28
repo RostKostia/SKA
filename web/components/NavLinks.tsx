@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV_ITEMS } from "@/lib/nav";
+import { NAV_ITEMS, TEAM_ITEM } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
-export function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+// owner adds the Team page, which only the owner can open.
+export function NavLinks({ onNavigate, owner = false }: { onNavigate?: () => void; owner?: boolean }) {
   const pathname = usePathname();
+  const items = owner ? [...NAV_ITEMS, TEAM_ITEM] : NAV_ITEMS;
   return (
     <ul className="grid gap-1">
-      {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+      {items.map(({ href, label, icon: Icon }) => {
         const current = href === "/" ? pathname === "/" : pathname.startsWith(href);
         return (
           <li key={href}>
