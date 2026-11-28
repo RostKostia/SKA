@@ -35,7 +35,7 @@ Where each entity lives in `db/migrations/000001_init.up.sql`, and where the sch
 | Payment | `payments` | `received_on` is a business date. A trigger marks the invoice paid and cancels queued reminders |
 | PaymentInitiation | `payment_initiations` | |
 | ReminderPolicy | `reminder_policies`, `message_templates` | Timing and wording are split. `before_due_days` adds nudges before the due date |
-| Reminder, OutboundMessage | `outbound_messages` | One table is both the send log and the job queue (`kind`, `sequence`, `tone`, `business_date`, `dedupe_key`). Due reminders come from the view `reminders_due` |
+| Reminder, OutboundMessage | `outbound_messages` | One table is both the send log and the job queue (`kind`, `sequence`, `tone`, `business_date`, `dedupe_key`). Due reminders come from the view `reminders_due`. `status` adds `cancelled`: right before sending, the backend checks the invoice again and doesn't send anything about a cancelled invoice, nor a reminder for one that is paid or financed. A `failed` email is resent only when someone retries it |
 | BankConnection, BankAccount, BalanceSnapshot, BankTransaction | `bank_connections`, `bank_accounts`, `balance_snapshots`, `bank_transactions` | Snapshots carry `business_date`. Transactions link to payments through `payments.bank_transaction_id` |
 | Cashflow | `cashflows` | Use these for money that isn't a bill (deposits, salaries). Rent and insurance are payable invoices in the seed |
 | ForecastRun | `forecast_runs`, plus `forecast_events()`, `forecast_points()`, `forecast_shortfall()` | The forecast rules are implemented in SQL |

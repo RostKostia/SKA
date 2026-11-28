@@ -27,7 +27,7 @@ Cafés, tradespeople and freelancers rarely fail for lack of customers. They fai
 3. **Warns you before you go negative.** The forecast combines the bank balance, upcoming bills, and each unpaid invoice on the day *that client* usually pays: "In 12 days you'll be €800 negative."
 4. **Offers a way out.** Remind specific clients, or get money now against your unpaid invoices (invoice financing or an overdraft). Financed invoices stop being chased.
 
-Planned after the first brief, not built yet: Google sign-in, Google Sheets sync and export, Gmail reminders with editable templates and an optional Claude draft, and a spending forecast by category against a monthly budget (alert above 80%). The cash-gap forecast stays the headline.
+Planned after the first brief, not built yet: Google sign-in, Google Sheets sync and export (only the CSV export exists so far), Gmail reminders with editable templates and an optional Claude draft, and a spending forecast by category against a monthly budget (alert above 80%). The cash-gap forecast stays the headline.
 
 **Out of scope:** physical cash in the till (the bank can't see it) and a WhatsApp channel (email only for the MVP).
 **Nice to have, if time allows:** Greek / English / Russian translation for expats, a client reliability score, and a "what if" chat ("Can I afford to hire someone?").
@@ -188,10 +188,10 @@ Every integration has a mock behind the same interface. If an API blocks progres
 | Service | What Kerdos uses it for | Status (28 Nov) | Settings |
 |---|---|---|---|
 | **Claude** | Reads chat messages ("Invoice Kostas €120") through tool use | Works with a key. Any failure falls back to the rule-based parser | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` |
-| **Bank of Cyprus** PSD2 sandbox ([portal](https://developer.bankofcyprus.com)) | Consent, accounts, balance, statement; incoming payments matched to invoices by number | App "Kerdos" registered, app token works. The client is tested against the documentation's samples. The consent screen in the sandbox stops at the OTP step, so a live sync hasn't run yet (question for the BoC mentors). Use `KERDOS_BANK=mock` for the demo | `KERDOS_BANK=boc`, `BOC_*` |
+| **Bank of Cyprus** PSD2 sandbox ([portal](https://developer.bankofcyprus.com)) | Consent, accounts, balance, statement; incoming payments matched to invoices by number | App "Kerdos" registered, app token works. The client is tested against the documentation's samples. The consent screen in the sandbox stops at the OTP step, so a live sync hasn't run yet (question for the BoC mentors). How to connect: [backend/README.md](backend/README.md#connecting-the-boc-sandbox). Use `KERDOS_BANK=mock` for the demo. The Payments API ("pay by bank") is planned for "Pay now" | `KERDOS_BANK=boc`, `BOC_*` |
 | **Jinius** (BoC B2B: e-invoicing, payments) | Sending the e-invoice with a payment link | Mock: the payment link is Kerdos's own pay page. Registration at https://b2b.integration.platform.cy is submitted and waiting for approval; then the client id and secret come from Settings → Developer. The API has `/v3/invoices` and `/v3/remittances` | `JINIUS_API_KEY` (not used yet) |
-| **Email** | Invoice copies, reminders, receipts, the owner's summary | Real over SMTP (Gmail with an app password), or only logged when `SMTP_HOST` is empty. A failed email stays failed until you retry it | `SMTP_*` |
-| **"Pay now"** and financing | The client pays; the owner gets money now | Simulated: no signed BoC payment initiation yet; offers and payout are sample data | `KERDOS_MOCK_FINANCING_FEE_BP` |
+| **Email** | Invoice copies, reminders, receipts, the owner's summary | Real over SMTP (tested with Gmail and an app password), or only logged when `SMTP_HOST` is empty. Chat and the mockup report what really happened to each email; a failed one says why and has a Retry button, and stays failed until you retry it. Nothing is emailed about a cancelled invoice, and paid or financed invoices are never chased | `SMTP_*` |
+| **"Pay now"** and financing | The client pays; the owner gets money now | Simulated: no signed BoC payment initiation yet; offers and payout are sample data (BoC has no lending API) | `KERDOS_MOCK_FINANCING_FEE_BP` |
 
 ## Status
 
@@ -201,7 +201,9 @@ Every integration has a mock behind the same interface. If an API blocks progres
 | Backend API (chat, invoices, reminders, forecast, financing, pay page, demo controls) | Prototype; checked by an end-to-end test through the API |
 | Next.js frontend (`web/`): overview, chat, invoices in both directions with CSV export, debtors, forecast and financing, reminders | Built on the backend API |
 | Clickable mockup (`mockup/`) | Runs the whole demo on the API |
-| Google sign-in, Sheets sync, Excel export, budgets, editing reminder rules and templates | Not built yet (the backend runs with `KERDOS_AUTH=dev`) |
+| Google Sheets sync, XLSX export | Not built yet. The web app's Invoices page exports CSV |
+| Google sign-in, budgets, editing reminder rules and templates, Claude-drafted reminders | Not built yet (the backend runs with `KERDOS_AUTH=dev`) |
+| The client's pay page, a bank connection page and a Retry button for failed emails in the web app | Not built yet; the backend endpoints are ready (see [`web/README.md`](web/README.md)) |
 
 All names, amounts and dates in the demo are sample data.
 
@@ -212,6 +214,7 @@ All names, amounts and dates in the demo are sample data.
 - **The offer when debts are smaller than the gap.** If unpaid invoices can't cover the whole shortfall, Kerdos offers an overdraft instead of offering what the invoices can cover.
 - **The whole demo hasn't been run end to end** on the laptop yet.
 - **Real services:** BoC consent (OTP step) and Jinius access, see [Integrations](#integrations).
+- **Google Sheets, not decided:** the proposal for the demo is a service account that writes to one shared spreadsheet. Giving each user their own sheet needs Google sign-in first.
 
 ### Sunday
 
