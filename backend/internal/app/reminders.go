@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strconv"
+	"strings"
 )
 
 type QueuedReminder struct {
@@ -83,7 +84,7 @@ func (a *App) RemindNow(ctx context.Context, u User, invoiceID string) (Message,
 	case inv.IsFinanced:
 		return Message{}, conflict("financed", "invoice "+inv.Number+" is financed, so Kerdos doesn't chase it")
 	}
-	var id string
+	var id, retryID string
 	err = a.tx(ctx, func(tx *sql.Tx) error {
 		var today, live int64
 		if err := tx.QueryRowContext(ctx, `SELECT
@@ -114,7 +115,19 @@ func (a *App) RemindNow(ctx context.Context, u User, invoiceID string) (Message,
 			}
 			spec.Kind, spec.Dedupe = "upcoming", "invoice:"+invoiceID+":manual:"+day
 		}
-		var err error
+		// The same reminder may already exist because it failed earlier (it keeps its dedupe key):
+		// then "Remind now" sends that one again rather than being refused as a duplicate.
+		var existing, status string
+		err := tx.QueryRowContext(ctx, `SELECT id::text, status FROM outbound_messages WHERE dedupe_key = $1`, spec.Dedupe).Scan(&existing, &status)
+		switch {
+		case err == nil && status == "failed":
+			retryID = existing
+			return nil
+		case err == nil:
+			return conflict("already_reminded", inv.CounterpartyName+" already has this reminder ("+status+")")
+		case !errors.Is(err, sql.ErrNoRows):
+			return err
+		}
 		if id, err = a.queueMessage(ctx, tx, spec); err != nil {
 			return err
 		}
@@ -127,8 +140,57 @@ func (a *App) RemindNow(ctx context.Context, u User, invoiceID string) (Message,
 	if err != nil {
 		return Message{}, err
 	}
-	a.Kick()
-	return a.getMessage(ctx, a.DB, id)
+	if retryID != "" {
+		return a.RetryMessage(ctx, u, retryID)
+	}
+	return a.SendNow(ctx, id)
+}
+
+// emailProblem turns a send error into a short reason the owner can act on.
+func emailProblem(errText string) string {
+	e := strings.ToLower(errText)
+	switch {
+	case strings.Contains(e, "535") || strings.Contains(e, "username and password not accepted") || strings.Contains(e, "login as"):
+		return "the mail server refused the login (check SMTP_USER and the app password in SMTP_PASSWORD)"
+	case strings.Contains(e, "connect to") || strings.Contains(e, "no such host") || strings.Contains(e, "connection refused"):
+		return "the mail server couldn't be reached"
+	case strings.Contains(e, "timeout") || strings.Contains(e, "deadline exceeded"):
+		return "the mail server didn't answer in time"
+	case strings.Contains(e, "recipient"):
+		return "the mail server refused the address"
+	}
+	line, _, _ := strings.Cut(strings.TrimPrefix(errText, "mail: "), "\n")
+	if len(line) > 120 {
+		line = line[:120] + "…"
+	}
+	return line
+}
+
+// outcome describes what happened to an email, for the chat: "" when it was sent.
+func outcome(m Message) string {
+	switch m.Status {
+	case "sent":
+		return ""
+	case "failed":
+		return "the email failed: " + emailProblem(m.Error)
+	case "cancelled":
+		return "it wasn't sent: " + strings.TrimPrefix(m.Error, "not sent: ")
+	default:
+		return "the email is still on its way"
+	}
+}
+
+// reminderLine is the chat line for a reminder, worded by what really happened to its email.
+func reminderLine(client string, m Message) string {
+	what := client + " about " + m.InvoiceNumber + " (" + toneLabel(m.Kind, m.Tone) + ")"
+	switch m.Status {
+	case "sent":
+		return "I reminded " + what + "."
+	case "failed", "cancelled":
+		return "I tried to remind " + what + ", but " + outcome(m) + "."
+	default:
+		return "I'm reminding " + what + "; the email is still on its way."
+	}
 }
 
 func toneLabel(kind, tone string) string {

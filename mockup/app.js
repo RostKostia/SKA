@@ -63,6 +63,22 @@
   let lastAnnounced = null;
 
   const cardOf = (m) => (m && m.card && typeof m.card === "object" ? m.card : null);
+  const problem = (err) => {
+    const e = String(err || "");
+    if (/535|not accepted|login as/i.test(e)) return "the mail server refused the login (check the app password in SMTP_PASSWORD)";
+    if (/connect to|no such host|refused/i.test(e)) return "the mail server couldn't be reached";
+    if (/timeout|deadline/i.test(e)) return "the mail server didn't answer in time";
+    return e.replace(/^mail: /, "").replace(/^not sent: /, "").split("\n")[0].slice(0, 120);
+  };
+  // One line saying what really happened to an email, with Retry when it failed.
+  function emailLine(msg, what) {
+    if (!msg) return "";
+    if (msg.status === "sent") return `<li>✓ ${esc(what)} emailed to ${esc(msg.recipient)}</li>`;
+    if (msg.status === "failed")
+      return `<li class="bad-line">✗ ${esc(what)} to ${esc(msg.recipient)} failed: ${esc(problem(msg.error))} <button type="button" class="btn small" data-act="retry-email" data-id="${esc(msg.id)}">Retry</button></li>`;
+    if (msg.status === "cancelled") return `<li>${esc(what)} not sent: ${esc(problem(msg.error))}</li>`;
+    return `<li>${esc(what)} to ${esc(msg.recipient)} is on its way</li>`;
+  }
   const messageById = (id) => s.messages.find((m) => m.id === id);
 
   async function load() {
@@ -204,7 +220,7 @@
         const simulated = inv.payment_link_url && inv.payment_link_url.includes("/pay/");
         return `<div class="paper"><div class="row"><h3>${esc(inv.number)} · ${esc(inv.counterparty_name)}</h3>${statusHtml(inv.display_status)}</div>
           <div class="amount">${eur(inv.amount_cents)}</div><p>${esc(inv.description)}</p>
-          <ul><li>✓ Sent via Jinius with a payment link${simulated ? " (simulated)" : ""}</li><li>✓ Copy sent by email</li><li>Due ${longDate(inv.due_date)}</li></ul>
+          <ul><li>✓ Sent via Jinius with a payment link${simulated ? " (simulated)" : ""}</li>${emailLine(s.messages.find((x) => x.invoice_id === inv.id && x.kind === "invoice"), "Copy")}<li>Due ${longDate(inv.due_date)}</li></ul>
           ${inv.pay_token ? `<div><button type="button" class="btn small" data-act="client" data-token="${esc(inv.pay_token)}">Open the client's page</button></div>` : ""}</div>`;
       }
       case "reminder": {
@@ -212,7 +228,7 @@
         const who = inv ? inv.counterparty_name : "the client";
         const label = c.tone ? TONE_LABEL[c.tone] : "Friendly nudge";
         return `<div class="paper"><div class="row"><h3>Reminder to ${esc(who)}</h3><span class="tag">${esc(label)} · email${msg ? " · " + esc(msg.status) : ""}</span></div>
-          ${msg ? `<p class="quote">${esc(msg.body)}</p>` : ""}</div>`;
+          ${msg ? `<p class="quote">${esc(msg.body)}</p>` : ""}${msg && msg.status !== "sent" ? `<ul>${emailLine(msg, "Reminder")}</ul>` : ""}</div>`;
       }
       case "warning": {
         const still = s.dash && s.dash.forecast && s.dash.forecast.shortfall;
@@ -336,7 +352,9 @@
       .filter((m) => m.kind === "overdue" || m.kind === "upcoming" || m.kind === "invoice")
       .slice(0, 12)
       .map((m) => `<tr><td>${shortDate(m.business_date)}</td><td>${esc(m.kind === "overdue" ? TONE_LABEL[m.tone] + " reminder " + m.sequence : m.kind === "upcoming" ? "Friendly nudge" : "Invoice")}</td>
-        <td>${esc(m.invoice_number)}</td><td>${esc(m.recipient)}</td><td>${esc(m.status)}${m.mode === "manual" ? " · manual" : ""}</td></tr>`)
+        <td>${esc(m.invoice_number)}</td><td>${esc(m.recipient)}</td>
+        <td class="wrap">${m.status === "failed" ? `<span class="bad-line">failed: ${esc(problem(m.error))}</span> <button type="button" class="btn small" data-act="retry-email" data-id="${esc(m.id)}">Retry</button>`
+          : m.status === "cancelled" ? `not sent: ${esc(problem(m.error))}` : esc(m.status)}${m.mode === "manual" ? " · manual" : ""}</td></tr>`)
       .join("");
     $("#view-reminders").innerHTML = `<div class="page-head"><h1>Reminders</h1><p class="muted">Kerdos chases unpaid invoices for you, by email. Financed and paid invoices are never chased.</p>
       <div class="interval"><span class="muted">First reminder</span><strong class="num">${plural(st.first_after_due_days, "day")}</strong><span class="muted">after the due date, then every</span><strong class="num">${plural(st.every_days, "day")}</strong></div></div>
@@ -468,7 +486,17 @@
     } else if (a === "remind") {
       act(async () => {
         const m = await api("POST", "/api/invoices/" + el.dataset.id + "/remind");
-        notify(`Reminder ${m.invoice_number ? "for " + m.invoice_number + " " : ""}sent (${m.tone ? TONE_LABEL[m.tone].toLowerCase() : "friendly nudge"}).`);
+        const what = `Reminder ${m.invoice_number ? "for " + m.invoice_number + " " : ""}(${m.tone ? TONE_LABEL[m.tone].toLowerCase() : "friendly nudge"})`;
+        if (m.status === "sent") notify(`${what} sent to ${m.recipient}.`);
+        else if (m.status === "failed") notify(`${what} failed: ${problem(m.error)}.`, true);
+        else notify(`${what} is on its way.`);
+      });
+    } else if (a === "retry-email") {
+      act(async () => {
+        const m = await api("POST", "/api/messages/" + el.dataset.id + "/retry");
+        if (m.status === "sent") notify(`Email sent to ${m.recipient}.`);
+        else if (m.status === "failed") notify(`Still failing: ${problem(m.error)}.`, true);
+        else notify(`Email ${m.status === "cancelled" ? "not sent: " + problem(m.error) : "is on its way"}.`);
       });
     } else if (a === "client") {
       clientToken = el.dataset.token;

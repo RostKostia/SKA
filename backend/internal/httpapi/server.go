@@ -54,6 +54,7 @@ func (s *Server) Handler() http.Handler {
 	route("GET /api/financing/offers/{id}", s.getOffer)
 	route("POST /api/financing/offers/{id}/accept", s.acceptOffer)
 	route("GET /api/messages", s.listMessages)
+	route("POST /api/messages/{id}/retry", s.retryMessage)
 	route("GET /api/reminders/settings", s.reminderSettings)
 	route("POST /api/demo/skip", s.skip)
 	route("POST /api/bank/connect", s.bankConnect)
@@ -359,6 +360,15 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request, _ app.User
 		return err
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"messages": list})
+	return nil
+}
+
+func (s *Server) retryMessage(w http.ResponseWriter, r *http.Request, u app.User) error {
+	m, err := s.App.RetryMessage(r.Context(), u, r.PathValue("id"))
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, m)
 	return nil
 }
 

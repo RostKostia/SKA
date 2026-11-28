@@ -245,3 +245,5 @@ body.busy #chat-form { opacity: 0.7; }
 .app[data-view="error"] .side { display: none; }
 #view-error { display: grid; gap: 12px; align-content: start; max-width: 720px; }
 #view-error a { color: var(--teal-deep); font-weight: 600; }
+.bad-line { color: var(--alert); }
+.paper li.bad-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

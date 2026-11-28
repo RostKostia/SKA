@@ -156,38 +156,131 @@ func render(tpl string, vars map[string]string) string {
 func (a *App) SendQueued(ctx context.Context) (int, error) {
 	sent := 0
 	for i := 0; i < 100; i++ {
-		done := false
-		err := a.tx(ctx, func(tx *sql.Tx) error {
-			var id, to, subject, body string
-			err := tx.QueryRowContext(ctx, `SELECT id::text, recipient, subject, body FROM outbound_messages
-				WHERE status = 'queued' AND scheduled_for <= now() ORDER BY scheduled_for, created_at LIMIT 1 FOR UPDATE SKIP LOCKED`).
-				Scan(&id, &to, &subject, &body)
-			if errors.Is(err, sql.ErrNoRows) {
-				done = true
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-			providerID, sendErr := a.Mailer.Send(ctx, mail.Message{To: to, Subject: subject, Body: body})
-			if sendErr != nil {
-				a.Log.Warn("email failed", "to", to, "err", sendErr)
-				_, err = tx.ExecContext(ctx, `UPDATE outbound_messages SET status = 'failed', error = $2, provider = $3 WHERE id = $1`, id, sendErr.Error(), a.Mailer.Provider())
-				return err
-			}
-			sent++
-			_, err = tx.ExecContext(ctx, `UPDATE outbound_messages SET status = 'sent', sent_at = now(), provider = $2, provider_message_id = $3 WHERE id = $1`,
-				id, a.Mailer.Provider(), providerID)
-			return err
-		})
+		status, err := a.sendNext(ctx, "")
 		if err != nil {
 			return sent, err
 		}
-		if done {
+		if status == "" {
 			break
+		}
+		if status == "sent" {
+			sent++
 		}
 	}
 	return sent, nil
+}
+
+// sendNext claims one queued email (only messageID, if given), checks that it should still
+// go out, and sends it. It returns the email's new status, or "" when nothing was claimed.
+func (a *App) sendNext(ctx context.Context, messageID string) (string, error) {
+	status := ""
+	err := a.tx(ctx, func(tx *sql.Tx) error {
+		var id, kind, invoiceID, to, subject, body string
+		err := tx.QueryRowContext(ctx, `SELECT id::text, kind, coalesce(invoice_id::text, ''), recipient, subject, body FROM outbound_messages
+			WHERE status = 'queued' AND scheduled_for <= now() AND ($1 = '' OR id::text = $1)
+			ORDER BY scheduled_for, created_at LIMIT 1 FOR UPDATE SKIP LOCKED`, messageID).
+			Scan(&id, &kind, &invoiceID, &to, &subject, &body)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		// Check again right before sending: the invoice may have been cancelled, paid or financed
+		// since the email was queued (or the row may have been requeued by hand).
+		if reason, err := a.staleReason(ctx, tx, kind, invoiceID); err != nil {
+			return err
+		} else if reason != "" {
+			a.Log.Info("email dropped", "to", to, "kind", kind, "reason", reason)
+			status = "cancelled"
+			_, err = tx.ExecContext(ctx, `UPDATE outbound_messages SET status = 'cancelled', error = $2 WHERE id = $1`, id, "not sent: "+reason)
+			return err
+		}
+		providerID, sendErr := a.Mailer.Send(ctx, mail.Message{To: to, Subject: subject, Body: body})
+		if sendErr != nil {
+			a.Log.Warn("email failed", "to", to, "err", sendErr)
+			status = "failed"
+			_, err = tx.ExecContext(ctx, `UPDATE outbound_messages SET status = 'failed', error = $2, provider = $3 WHERE id = $1`, id, sendErr.Error(), a.Mailer.Provider())
+			return err
+		}
+		status = "sent"
+		_, err = tx.ExecContext(ctx, `UPDATE outbound_messages SET status = 'sent', sent_at = now(), error = NULL, provider = $2, provider_message_id = $3 WHERE id = $1`,
+			id, a.Mailer.Provider(), providerID)
+		return err
+	})
+	return status, err
+}
+
+// staleReason says why an email about an invoice must not go out any more, or "" if it may.
+func (a *App) staleReason(ctx context.Context, q querier, kind, invoiceID string) (string, error) {
+	if invoiceID == "" {
+		return "", nil
+	}
+	var status string
+	var financed bool
+	var outstanding int64
+	err := q.QueryRowContext(ctx, `SELECT status, is_financed, outstanding_cents FROM invoice_overview WHERE id = $1`, invoiceID).
+		Scan(&status, &financed, &outstanding)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "the invoice no longer exists", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	switch {
+	case status == "cancelled":
+		return "the invoice was cancelled", nil
+	case kind != "upcoming" && kind != "overdue":
+		return "", nil // invoice and receipt emails still go out once the invoice is paid
+	case status == "paid" || outstanding <= 0:
+		return "the invoice is paid", nil
+	case financed:
+		return "the invoice is financed, so it isn't chased", nil
+	}
+	return "", nil
+}
+
+// SendNow sends one queued email immediately and returns it with its real status: "sent",
+// "failed" (with the error) or "cancelled". If the worker is sending it at that moment, this
+// waits a few seconds for the outcome; it can come back still "queued" if the server is slow.
+func (a *App) SendNow(ctx context.Context, messageID string) (Message, error) {
+	if _, err := a.sendNext(ctx, messageID); err != nil {
+		return Message{}, err
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		m, err := a.getMessage(ctx, a.DB, messageID)
+		if err != nil || m.Status != "queued" || time.Now().After(deadline) {
+			return m, err
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// RetryMessage sends a failed email again, at once, with the same text.
+func (a *App) RetryMessage(ctx context.Context, u User, id string) (Message, error) {
+	if !ValidID(id) {
+		return Message{}, notFound("email")
+	}
+	m, err := a.getMessage(ctx, a.DB, id)
+	if err != nil {
+		return m, err
+	}
+	if m.Status != "failed" {
+		return m, conflict("not_failed", "only failed emails can be retried; this one is "+m.Status)
+	}
+	res, err := a.DB.ExecContext(ctx, `UPDATE outbound_messages SET status = 'queued', error = NULL, scheduled_for = now() WHERE id = $1 AND status = 'failed'`, id)
+	if sqlState(err) == "23505" {
+		return m, conflict("superseded", "a later reminder with the same number was already sent, so this one isn't needed")
+	}
+	if err != nil {
+		return m, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return m, conflict("not_failed", "this email is no longer failed")
+	}
+	a.audit(ctx, a.DB, u.ID, "email.retried", "outbound_message", id, nil)
+	return a.SendNow(ctx, id)
 }
 
 // Run is the background worker: queue reminders that are due and send queued emails, on

@@ -157,24 +157,31 @@ type NewInvoice struct {
 	Lines          []parse.Line `json:"lines"`
 }
 
-func (a *App) CreateInvoice(ctx context.Context, u User, in NewInvoice) (Invoice, error) {
+// SentInvoice is an invoice that was just sent, with what happened to its email copy.
+type SentInvoice struct {
+	Invoice
+	Email *Message `json:"email"` // nil only if the email copy had been queued before
+}
+
+func (a *App) CreateInvoice(ctx context.Context, u User, in NewInvoice) (SentInvoice, error) {
 	if !ValidID(in.CounterpartyID) {
-		return Invoice{}, badRequest("bad_counterparty", "counterparty_id is required")
+		return SentInvoice{}, badRequest("bad_counterparty", "counterparty_id is required")
 	}
 	if len(in.Lines) == 0 {
-		return Invoice{}, badRequest("no_lines", "an invoice needs at least one line")
+		return SentInvoice{}, badRequest("no_lines", "an invoice needs at least one line")
 	}
 	for _, l := range in.Lines {
 		if l.QuantityMilli <= 0 || l.UnitPriceCents <= 0 || strings.TrimSpace(l.Description) == "" {
-			return Invoice{}, badRequest("bad_line", "each line needs a description, a quantity and a price above zero")
+			return SentInvoice{}, badRequest("bad_line", "each line needs a description, a quantity and a price above zero")
 		}
 	}
 	return a.createAndSend(ctx, u, in.CounterpartyID, in.Lines, "manual", "")
 }
 
 // createAndSend writes the invoice and its lines, then delivers it at once (automatic
-// invoicing). If delivery fails the invoice stays a draft and the error says why.
-func (a *App) createAndSend(ctx context.Context, u User, counterpartyID string, lines []parse.Line, source, sourceText string) (Invoice, error) {
+// invoicing) and sends the email copy. If delivery fails the invoice stays a draft and the
+// error says why. The email's real outcome is in SentInvoice.Email.
+func (a *App) createAndSend(ctx context.Context, u User, counterpartyID string, lines []parse.Line, source, sourceText string) (SentInvoice, error) {
 	var id string
 	err := a.tx(ctx, func(tx *sql.Tx) error {
 		var vatRate string
@@ -211,45 +218,56 @@ func (a *App) createAndSend(ctx context.Context, u User, counterpartyID string, 
 		return nil
 	})
 	if err != nil {
-		return Invoice{}, err
+		return SentInvoice{}, err
 	}
 	return a.sendInvoice(ctx, u, id)
 }
 
-func (a *App) sendInvoice(ctx context.Context, u User, id string) (Invoice, error) {
+func (a *App) sendInvoice(ctx context.Context, u User, id string) (SentInvoice, error) {
 	inv, err := a.getInvoice(ctx, a.DB, id)
 	if err != nil {
-		return inv, err
+		return SentInvoice{Invoice: inv}, err
 	}
 	var email string
 	if err := a.DB.QueryRowContext(ctx, `SELECT coalesce(email, '') FROM counterparties WHERE id = $1`, inv.CounterpartyID).Scan(&email); err != nil {
-		return inv, err
+		return SentInvoice{Invoice: inv}, err
 	}
 	if email == "" {
-		return inv, conflict("no_email", inv.CounterpartyName+" has no email address, so the invoice wasn't sent")
+		return SentInvoice{Invoice: inv}, conflict("no_email", inv.CounterpartyName+" has no email address, so the invoice wasn't sent")
 	}
 	d, err := a.Deliverer.Deliver(ctx, jinius.Invoice{ID: inv.ID, Number: inv.Number, ClientName: inv.CounterpartyName, ClientEmail: email,
 		AmountCents: inv.AmountCents, DueDate: inv.DueDate.Time, PayToken: inv.PayToken})
 	if err != nil {
 		a.Log.Error("invoice delivery failed", "invoice", inv.Number, "err", err)
-		return inv, conflict("delivery_failed", "invoice "+inv.Number+" was created but not sent: "+err.Error())
+		return SentInvoice{Invoice: inv}, conflict("delivery_failed", "invoice "+inv.Number+" was created but not sent: "+err.Error())
 	}
+	var msgID string
 	err = a.tx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `UPDATE invoices SET status = 'sent', sent_at = now(), provider = $2, external_id = $3, payment_link_url = $4
 			WHERE id = $1 AND status = 'draft'`, id, d.Provider, d.ExternalID, d.PaymentLinkURL); err != nil {
 			return err
 		}
-		if _, err := a.queueMessage(ctx, tx, msgSpec{Kind: "invoice", Mode: "automated", InvoiceID: id, Dedupe: "invoice:" + id + ":sent", CreatedBy: u.ID}); err != nil {
+		var err error
+		if msgID, err = a.queueMessage(ctx, tx, msgSpec{Kind: "invoice", Mode: "automated", InvoiceID: id, Dedupe: "invoice:" + id + ":sent", CreatedBy: u.ID}); err != nil {
 			return err
 		}
 		a.audit(ctx, tx, u.ID, "invoice.sent", "invoice", id, map[string]any{"provider": d.Provider, "external_id": d.ExternalID})
 		return nil
 	})
 	if err != nil {
-		return inv, err
+		return SentInvoice{Invoice: inv}, err
 	}
-	a.Kick()
-	return a.getInvoice(ctx, a.DB, id)
+	out := SentInvoice{}
+	if msgID != "" {
+		// Send the copy now, so the answer says what really happened to it.
+		m, err := a.SendNow(ctx, msgID)
+		if err != nil {
+			return out, err
+		}
+		out.Email = &m
+	}
+	out.Invoice, err = a.getInvoice(ctx, a.DB, id)
+	return out, err
 }
 
 func (a *App) CancelInvoice(ctx context.Context, u User, id string) (Invoice, error) {
