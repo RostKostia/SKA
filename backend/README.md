@@ -40,7 +40,7 @@ On Windows PowerShell, see [Windows (PowerShell)](../README.md#windows-powershel
 |---|---|---|
 | `KERDOS_DATABASE_URL` | `postgres://kerdos:kerdos@127.0.0.1:5432/kerdos?sslmode=disable` | The database |
 | `KERDOS_HTTP_ADDR` | `:8080` | Where the API listens |
-| `KERDOS_PUBLIC_URL` | `http://localhost:3000` | The frontend. Pay links point to `<this>/pay/<token>`; BoC consent returns to `<this>/settings` |
+| `KERDOS_PUBLIC_URL` | `http://localhost:3000` | The frontend. Pay links point to `<this>/pay/<token>`; BoC consent returns to `<this>/settings` (not built in the web app yet) |
 | `KERDOS_DEMO` | `1` | Enables `/api/demo/skip` and `/api/demo/reset`. Set it to `0` outside the demo |
 | `KERDOS_SEED_FILE` | `../db/seed/sample.sql` | What reset loads |
 | `KERDOS_MOCKUP_DIR` | `../mockup` | The clickable mockup, served at `/mockup/` (and `/` redirects there) when the folder exists. `off` turns it off |
@@ -86,6 +86,18 @@ Every email is a row in `outbound_messages`, which is both the log and the send 
 
 Chat and the mockup only say an email went out once the mail server accepted it. If it failed, the reply says why (a refused Gmail login, for example) and the mockup shows a Retry button. A failed email stays `failed` until you retry it; nothing resends it on its own.
 
+## Connecting the BoC sandbox
+
+With `KERDOS_BANK=boc` and the `BOC_*` settings in `.env` (see `.env.example`), Kerdos reads a BoC sandbox account through the Accounts API:
+
+1. `curl -X POST localhost:8080/api/bank/connect` returns an `authorize_url`. In PowerShell: `Invoke-RestMethod -Method Post http://localhost:8080/api/bank/connect`.
+2. Open that link in a browser and sign in with BoC's sandbox test user (`BOC_SANDBOX_USERNAME` and `BOC_SANDBOX_PASSCODE` in `.env.example`). Then approve the accounts.
+3. BoC sends the browser back to `/api/bank/callback`. Kerdos activates the subscription, saves the accounts (the first current account becomes the primary one) and syncs the balance and the last 90 days of the statement. An incoming payment that mentions an invoice number marks that invoice paid.
+4. The backend then redirects to `KERDOS_PUBLIC_URL/settings?bank=connected` (or `?bank=error`). The web app has no `/settings` page yet, so you'll see "not found" there, but the connection is already saved.
+5. `POST /api/bank/sync` fetches again whenever you want. Nothing syncs on its own.
+
+The consent lasts 180 days. Once connected, the forecast starts from the sandbox balance, so the demo's "€800 negative" numbers change. `POST /api/demo/reset` removes the connection and goes back to the sample story. For the 2-minute demo, use `KERDOS_BANK=mock`.
+
 ## Layout
 
 ```
@@ -105,7 +117,7 @@ The rules live in the database (`invoice_overview`, `reminders_due`, `forecast_*
 ## Tests
 
 ```sh
-go test ./...                                  # unit tests: parser, money, Claude fallback, BoC client
+go test ./...                                  # unit tests: parser, money, Claude fallback, BoC client, SMTP against a fake mail server
 ```
 
 The end-to-end test resets the database it is given, so point it at a separate one:
@@ -116,15 +128,17 @@ docker compose -f db/compose.yaml --env-file db/.env exec -T db psql -U kerdos -
 KERDOS_TEST_DATABASE_URL="postgres://kerdos:<password>@127.0.0.1:5432/kerdos_test?sslmode=disable" go test ./internal/httpapi/
 ```
 
+The end-to-end tests are `demo_test.go` (the whole demo) and `email_test.go` (failed and retried emails, cancelled invoices, reminders that fail).
+
 The BoC client is tested against a fake server that replays the sample responses from the BoC documentation, including transactions with no `dcInd`. It has not been run against the live sandbox yet.
 
 ## Real, simulated, not built yet
 
-- **Real:** the database rules; chat parsing (rules, or Claude with a key); email over SMTP; BoC consent, balance and statement sync, with incoming payments matched by invoice number.
+- **Real:** the database rules; chat parsing (rules, or Claude with a key); email over SMTP, with each email's real outcome reported; BoC consent, balance and statement sync, with incoming payments matched by invoice number (not yet run against the live sandbox).
 - **Simulated:** Jinius delivery (the payment link is Kerdos's own pay page); "Pay now" (no signed BoC payment initiation yet); financing offers and payout; the bank movements during "Skip time" in mock mode.
 - **Not built yet:**
   - Google sign-in (`KERDOS_AUTH=dev` stands in), and the Gmail API (SMTP works with Gmail meanwhile)
-  - Sheets sync and export
+  - Google Sheets sync and XLSX export (the web app builds its CSV export from `GET /api/invoices`)
   - Budget and category endpoints
   - BoC payment initiation
   - `api/openapi.yaml`, which the frontend spec expects: this README's endpoint table is the contract until then

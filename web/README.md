@@ -30,6 +30,11 @@ npm run build && npm start
 | `/reminders` | How automatic reminders go out, the email templates, and every email sent |
 | `/design` | The design kit |
 
-## Not built yet (the backend has no endpoint for these)
+## Not built yet
 
-Google sign-in and sign-out (the backend runs with `KERDOS_AUTH=dev`), Sheets sync, Excel export, budgets and category forecasts, editing reminder rules and templates, writing a reminder's text yourself, and the client's pay page (`/pay/{token}`, the backend's `GET /api/pay/{token}` is ready for it).
+The backend has no endpoint yet for: Google sign-in and sign-out (the backend runs with `KERDOS_AUTH=dev`), Google Sheets sync, Excel export, budgets and category forecasts, editing reminder rules and templates, and writing a reminder's text yourself.
+
+The backend is ready, but the web app has no page or button yet for:
+- the client's pay page: `/pay/{token}`, using `GET` and `POST /api/pay/{token}`
+- connecting the bank: `/settings`, using `POST /api/bank/connect` and `POST /api/bank/sync`. BoC consent returns to `/settings?bank=connected` or `?bank=error`
+- retrying a failed email: `POST /api/messages/{id}/retry`. The mockup has a Retry button

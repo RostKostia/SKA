@@ -147,12 +147,13 @@ go test ./internal/httpapi/
 | Database schema, demo data, rules | Done; checked by `db/tests/demo_story.sql` |
 | Backend API (chat, invoices, reminders, forecast, financing, pay page, demo controls) | Prototype; checked by an end-to-end test through the API |
 | Chat parsing | Rule-based, or Claude when a key is set (falls back to the rules on any failure) |
-| Email | Logged, or sent over SMTP (for example Gmail) |
-| BoC open banking (consent, balance, transactions, matching payments to invoices) | Client written and tested against the BoC documentation's samples; not yet run against the live sandbox |
+| Email | Logged, or sent over SMTP (tested with Gmail). Chat and the mockup report what really happened to each email, and failed emails have a Retry button. Emails for cancelled invoices are never sent |
+| BoC open banking (consent, balance, transactions, matching payments to invoices) | Built with `KERDOS_BANK=boc` and tested against the BoC documentation's samples; not yet run against the live sandbox. How to connect: [backend/README.md](backend/README.md#connecting-the-boc-sandbox) |
 | Jinius e-invoicing | Mock: no public API docs yet, access to be confirmed with the organisers |
 | "Pay now" through BoC, financing offers | Simulated |
 | Next.js frontend (`web/`): overview, chat, invoices, debtors, forecast and financing, reminders | Built on the backend API; see `web/README.md` |
-| Google sign-in, Sheets sync, budgets, the client's pay page in the frontend | Not built yet |
+| Google Sheets sync, XLSX export | Not built yet. The web app's Invoices page exports CSV |
+| Google sign-in, budgets, and the client's pay page and a bank connection page in the frontend | Not built yet |
 
 All names, amounts and dates in the demo are sample data.
 

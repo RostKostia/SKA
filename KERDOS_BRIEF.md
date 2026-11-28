@@ -26,12 +26,27 @@ An AI assistant for small businesses, built on Claude and integrated with Jinius
 From the Kerdos feature request. The ones the backend does not serve yet are listed in `web/README.md`.
 - **Google sign-in** (OAuth 2.0 / OpenID Connect). The backend holds all tokens; the browser only gets a session cookie. Only the `owner` role exists for now.
 - **Invoices page with two directions:** "To the company" (payable, from suppliers) and "From the company" (receivable). Search, filter, sort.
-- **Google Sheets sync and export** (CSV/XLSX, "Open in Google Sheets").
+- **Google Sheets sync and export** (CSV/XLSX, "Open in Google Sheets"). Only the CSV export exists so far.
 - **Gmail reminders, manual and automated:** editable templates with placeholders such as `{client_name}`, `{invoice_number}`, `{amount}`, `{due_date}`; optional Claude draft that the owner approves; every send logged, no duplicate sends.
 - **Spending forecast by category against a monthly budget,** with an alert above 80%. The cash-gap forecast above stays the headline; this is a second view on the same data.
 
-### Status of the web app
-The Next.js app in `web/` runs on the Go backend's API: overview, chat invoicing, invoices (both directions, CSV export), debtors, the cash forecast with the financing offer, and reminders. See `web/README.md` for what is not built yet.
+### Status (Sat 28 Nov)
+Working end to end on the Go backend, in both the web app (`web/`) and the mockup (served at `/mockup/`):
+- Chat invoicing, automatic and manual reminders, debtors, the cash forecast, "Get €800 now", and the demo controls (Skip time, Reset). The client's pay page with "Pay now" is in the mockup and the API, not yet in the web app.
+- **Email:** real over SMTP, tested with Gmail and an app password. Chat and the mockup say an email went out only once the mail server accepted it; a failed one says why and has a Retry button. Nothing is emailed about a cancelled invoice, and paid or financed invoices are never chased.
+- **Claude** reads chat messages when `ANTHROPIC_API_KEY` is set. Otherwise, or on any failure, the rule-based parser does.
+- **BoC open banking:** consent, accounts, balance and statement (the Accounts API) are built, and an incoming payment that mentions an invoice number marks that invoice paid. So far this is tested only against the sample responses in the BoC documentation. It has not been run against the live sandbox yet.
+
+Simulated: Jinius delivery (no public docs), "Pay now" (the BoC Payments API isn't built yet), and financing offers and payout (BoC has no lending API).
+
+Not built: Google sign-in, Google Sheets sync, XLSX export (the web app exports CSV), budgets and the category forecast, editing reminder templates, Claude-drafted reminders, and a bank connection page in the web app.
+
+Details: the Status table in `README.md`, and `web/README.md` for the web app.
+
+### Open items
+- Run the BoC connection against the live sandbox from a team laptop (steps in `backend/README.md`).
+- Google Sheets: the proposal for the demo is a service account that writes to one shared spreadsheet. Giving each user their own sheet needs Google sign-in first. Not decided yet.
+- Confirm Jinius access with the organisers.
 
 ### Architecture
 - **Frontend:** Next.js (App Router, TypeScript) in `web/`. It only displays data and proxies to the backend. Every outside service sits behind a mock in the backend, so the demo never depends on a service being up.
@@ -54,7 +69,7 @@ The Next.js app in `web/` runs on the Go backend's API: overview, chat invoicing
 - It brings new SME clients into BoC.
 
 ## APIs
-- BoC developer portal and sandbox: https://developer.bankofcyprus.com (accounts, balances, transactions, payments via SEPA/SWIFT).
+- BoC developer portal and sandbox: https://developer.bankofcyprus.com (accounts, balances, transactions, payments via SEPA/SWIFT). Kerdos uses the Accounts API: subscription consent, accounts, balance and statement. The Payments API ("pay by bank") is planned for "Pay now". The sandbox settings are in `.env.example`.
 - Jinius: https://www.bankofcyprus.com/en-gb/wholesale/Digital-solutions/digitize-your-business/Jinius2/. The Marketplace API uses an account API key. Public docs for e-invoicing were not found. **Confirm access with the organisers.**
 - If an API is unavailable, use a mock or adapter behind the same interface and fall back to demo data. The demo must never break.
 
