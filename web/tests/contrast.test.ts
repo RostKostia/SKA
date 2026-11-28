@@ -23,14 +23,18 @@ function contrast(a: string, b: string): number {
 
 // Text on its background must meet WCAG AA for body text.
 const PAIRS: [string, string][] = [
-  ["--ink", "--stone"],
-  ["--ink", "--paper"],
-  ["--ink-muted", "--stone"],
-  ["--ink-muted", "--paper"],
-  ["--accent-ink", "--accent"],
-  ["--danger-ink", "--danger"],
-  ["--stamp-blue", "--paper"],
-  ["--stamp-red", "--paper"],
+  ["--foreground", "--background"],
+  ["--foreground", "--surface"],
+  ["--muted", "--background"],
+  ["--muted", "--surface"],
+  ["--muted", "--surface-raised"],
+  ["--accent-foreground", "--accent"],
+  ["--danger-foreground", "--danger"],
+  ["--accent", "--surface"],
+  ["--success", "--surface"],
+  ["--warning", "--surface"],
+  ["--danger", "--surface"],
+  ["--info", "--surface"],
 ];
 
 describe("design tokens", () => {

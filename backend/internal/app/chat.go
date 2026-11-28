@@ -236,7 +236,7 @@ func (a *App) respond(ctx context.Context, u User, text string, res parse.Result
 		return reply(fmt.Sprintf("%s in all. %s.", money.Format(total), strings.Join(parts, "; ")), map[string]any{"type": "debtors"})
 	}
 	return reply(`I can invoice a client ("Invoice Kostas €120"), chase a payment ("Remind Andreas"), tell you how your cash looks ("Will I go negative?") or get you money now against unpaid invoices ("Get money now").`,
-		map[string]any{"type": "suggestions", "chips": []string{"Invoice Kostas €120", "Invoice Kostas, 3 hours at €40", "Will I go negative?", "Who owes me?"}})
+		map[string]any{"type": "suggestions", "chips": []string{"Invoice Kostas €120", "Invoice Kostas, 3 hours at €40", "Will I go negative?", "Show outstanding receivables"}})
 }
 
 func (a *App) chatSend(ctx context.Context, u User, cpID string, d *parse.Draft, sourceText string, reply replyFunc) error {
