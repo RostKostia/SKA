@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<!-- Shown instead of the app when the API runs with KERDOS_AUTH=accounts and nobody is signed in. -->
+<div class="auth-screen" id="auth" hidden></div>
 <div class="app" id="app" data-view="chat">
   <nav class="nav" aria-label="Main">
     <div class="brand"><span class="mark" aria-hidden="true">κ</span><span class="wordmark">Kerdos</span></div>
@@ -25,6 +27,8 @@
     <div class="who"><span id="biz">Kerdos</span><span class="badge" id="badge" hidden>Demo data</span></div>
     <div class="top-actions">
       <span id="today"></span>
+      <span id="user-name" hidden></span>
+      <button type="button" class="btn" id="btn-sign-out" hidden>Sign out</button>
       <button type="button" class="btn" id="btn-skip-time" hidden>Skip time: +3 days</button>
       <button type="button" class="btn" id="btn-reset" hidden>Reset demo</button>
       <button type="button" class="btn" id="btn-client-view">Client view</button>

@@ -67,6 +67,8 @@ npm install
 npm run dev
 ```
 
+**Database created on 27 or 28 Nov?** Run the `migrate up` command from step 1 again: it adds sign-in (`000002_accounts`) and keeps your data.
+
 **Database created before 27 Nov?** The schema was rewritten in place (still migration 1), so an older local database must be emptied first: `docker compose -f db/compose.yaml --env-file db/.env down -v` deletes it; then run step 1 again.
 
 **The demo:** in the app's Chat, send "Invoice Kostas €120". Then skip 3 days with `curl -X POST localhost:8080/api/demo/skip -d '{"days":3}'` (Andreas gets a firm reminder), ask "Will I go negative?", press "Get €800 now" and accept. `curl -X POST localhost:8080/api/demo/reset` starts the story again.
@@ -76,6 +78,8 @@ On Windows PowerShell, several of these commands need small changes: see [Window
 **The clickable mockup on live data:** with the backend running, open http://localhost:8080/mockup/. It has the whole demo in one screen: chat, Skip time, the warning, "Get €800 now", and the client's phone view with "Pay now". Opened as a file, it only shows how to start the API.
 
 No keys are needed: the bank, Jinius, email and chat parsing all have working mocks. Add `ANTHROPIC_API_KEY`, the `SMTP_*` settings or `KERDOS_BANK=boc` with the `BOC_*` settings to switch the real ones on (see `.env.example`).
+
+**Sign-in.** By default (`KERDOS_AUTH=dev`) there is no sign-in: everyone acts as the owner, which keeps the curl commands above simple. Set `KERDOS_AUTH=accounts` in `.env` and restart the backend to require accounts. The first person to open the app creates the owner account; the owner invites the others from the Team page. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` for "Continue with Google". With accounts on, the curl commands need a session: sign in with `POST /api/auth/login` and send the `kerdos_session` cookie back.
 
 ## Windows (PowerShell)
 
@@ -128,6 +132,7 @@ cd backend
 go test ./...
 docker compose -f ../db/compose.yaml --env-file ../db/.env exec -T db createdb -U kerdos kerdos_test
 cmd /c "docker compose -f ../db/compose.yaml --env-file ../db/.env exec -T db psql -U kerdos -d kerdos_test -v ON_ERROR_STOP=1 < ..\db\migrations\000001_init.up.sql"
+cmd /c "docker compose -f ../db/compose.yaml --env-file ../db/.env exec -T db psql -U kerdos -d kerdos_test -v ON_ERROR_STOP=1 < ..\db\migrations\000002_accounts.up.sql"
 $env:KERDOS_TEST_DATABASE_URL = "postgres://kerdos:<password from db/.env>@127.0.0.1:5432/kerdos_test?sslmode=disable"
 go test ./internal/httpapi/
 ```
@@ -153,7 +158,8 @@ go test ./internal/httpapi/
 | "Pay now" through BoC, financing offers | Simulated |
 | Next.js frontend (`web/`): overview, chat, invoices, debtors, forecast and financing, reminders | Built on the backend API; see `web/README.md` |
 | Google Sheets sync, XLSX export | Not built yet. The web app's Invoices page exports CSV |
-| Google sign-in, budgets, and the client's pay page and a bank connection page in the frontend | Not built yet |
+| Accounts: email and password or Google sign-in, owner and invited members, account and team pages | Built (`KERDOS_AUTH=accounts`), in the web app and the mockup; Google sign-in needs a Google client ID (see [backend/README.md](backend/README.md#accounts-and-sign-in)) |
+| Budgets, and the client's pay page and a bank connection page in the frontend | Not built yet |
 
 All names, amounts and dates in the demo are sample data.
 

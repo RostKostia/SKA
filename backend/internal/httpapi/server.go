@@ -1,10 +1,10 @@
 // Package httpapi is the JSON API in front of package app. Routes use Go 1.22 patterns.
-// Every /api route except the public pay page and the bank callback needs a signed-in user;
-// in KERDOS_AUTH=dev that is the first admin.
+// Every /api route except sign-in, the public pay page and the bank callback needs a signed-in
+// user: with KERDOS_AUTH=accounts a session (see auth.go); with KERDOS_AUTH=dev every request
+// acts as the first admin.
 package httpapi
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -18,9 +18,11 @@ import (
 type Server struct {
 	App       *app.App
 	Log       *slog.Logger
-	AuthMode  string // "dev"
+	AuthMode  string // "dev" (every request is the first admin) or "accounts" (sign-in required)
 	PublicURL string // the frontend, for the redirect after BoC consent
 	MockupDir string // if set, the clickable mockup is served at /mockup/ (same origin, so no CORS needed)
+
+	attempts attempts // failed sign-ins, for rate limiting
 }
 
 type handler func(w http.ResponseWriter, r *http.Request, u app.User) error
@@ -37,7 +39,31 @@ func (s *Server) Handler() http.Handler {
 	})
 
 	route := func(pattern string, h handler) { mux.Handle(pattern, s.authed(h)) }
+	public := func(pattern string, h func(w http.ResponseWriter, r *http.Request) error) {
+		mux.HandleFunc(pattern, s.public(h))
+	}
+
+	// Signing in (public), the account page and the team (owner only).
+	public("GET /api/auth/status", s.authStatus)
+	public("POST /api/auth/signup", s.signUp)
+	public("POST /api/auth/login", s.logIn)
+	public("POST /api/auth/logout", s.logOut)
+	public("POST /api/auth/exchange", s.exchangeLoginCode)
+	public("GET /api/auth/invites/{token}", s.inviteInfo)
+	public("POST /api/auth/google/start", s.googleStart)
+	mux.HandleFunc("GET /api/auth/google/start", s.googleStartRedirect)
+	mux.HandleFunc("GET /api/auth/google/callback", s.googleCallback)
+	route("POST /api/auth/logout-everywhere", s.logOutEverywhere)
 	route("GET /api/me", s.me)
+	route("PATCH /api/me", s.updateMe)
+	route("POST /api/me/password", s.changePassword)
+	route("POST /api/me/google/link", s.linkGoogle)
+	route("DELETE /api/me/google", s.unlinkGoogle)
+	route("GET /api/team", ownerOnly(s.team))
+	route("POST /api/team/invites", ownerOnly(s.invite))
+	route("DELETE /api/team/invites/{id}", ownerOnly(s.revokeInvite))
+	route("DELETE /api/team/members/{id}", ownerOnly(s.removeMember))
+
 	route("GET /api/dashboard", s.dashboard)
 	route("GET /api/chat", s.listChat)
 	route("POST /api/chat", s.postChat)
@@ -60,8 +86,13 @@ func (s *Server) Handler() http.Handler {
 	route("POST /api/bank/connect", s.bankConnect)
 	route("POST /api/bank/sync", s.bankSync)
 
-	// No user needed: reset must work on an empty database (it is refused unless KERDOS_DEMO=1).
-	mux.HandleFunc("POST /api/demo/reset", s.public(s.reset))
+	// Reset is refused unless KERDOS_DEMO=1. In dev mode it needs no user, so it works on an
+	// empty database; with accounts, only the owner may reset (accounts are kept).
+	if s.AuthMode == "dev" {
+		public("POST /api/demo/reset", s.reset)
+	} else {
+		route("POST /api/demo/reset", ownerOnly(func(w http.ResponseWriter, r *http.Request, _ app.User) error { return s.reset(w, r) }))
+	}
 
 	// Public: the client's pay page and the browser coming back from 1Bank.
 	mux.HandleFunc("GET /api/pay/{token}", s.public(s.getPay))
@@ -82,29 +113,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, errBody("not_found", "no such endpoint: "+r.Method+" "+r.URL.Path))
 	})
-	return s.logRequests(s.recoverPanics(mux))
+	return s.logRequests(s.recoverPanics(s.checkOrigin(mux)))
 }
 
 // ---------------------------------------------------------------- middleware and helpers
 
 type ctxKey struct{}
-
-func (s *Server) authed(h handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.AuthMode != "dev" {
-			writeJSON(w, http.StatusNotImplemented, errBody("auth_not_implemented", "only KERDOS_AUTH=dev exists in this prototype; Google sign-in is next"))
-			return
-		}
-		u, err := s.App.DevUser(r.Context())
-		if err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if err := h(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, u)), u); err != nil {
-			s.fail(w, r, err)
-		}
-	})
-}
 
 func (s *Server) public(h func(w http.ResponseWriter, r *http.Request) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -195,11 +209,6 @@ func intQuery(r *http.Request, key string, def int) int {
 }
 
 // ---------------------------------------------------------------- handlers
-
-func (s *Server) me(w http.ResponseWriter, _ *http.Request, u app.User) error {
-	writeJSON(w, http.StatusOK, u)
-	return nil
-}
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request, _ app.User) error {
 	d, err := s.App.Dashboard(r.Context())

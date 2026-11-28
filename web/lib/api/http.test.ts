@@ -89,3 +89,33 @@ describe("createHttpApi (Go backend routes)", () => {
     expect(await api(fetchImpl).getMe().catch((e) => e)).toMatchObject({ status: 0, code: "unreachable" });
   });
 });
+
+describe("createHttpApi (accounts)", () => {
+  it("signs in with a password and asks the backend for the session token", async () => {
+    const { calls, fetchImpl } = fakeFetch(() => json({ user: { id: "u1" }, token: "tok" }));
+    expect(await api(fetchImpl).logIn("anna@example.com", "pw")).toEqual({ user: { id: "u1" }, token: "tok" });
+    expect(calls[0]).toMatchObject({ url: "http://go:8080/api/auth/login", method: "POST" });
+    expect(calls[0].headers.get("x-kerdos-return-token")).toBe("1");
+    expect(JSON.parse(calls[0].body!)).toEqual({ email: "anna@example.com", password: "pw" });
+  });
+
+  it("resolves an empty 204 reply", async () => {
+    const { calls, fetchImpl } = fakeFetch(() => new Response(null, { status: 204 }));
+    await expect(api(fetchImpl).logOut()).resolves.toBeUndefined();
+    await api(fetchImpl).removeMember("a/b");
+    expect(calls[1]).toMatchObject({ url: "http://go:8080/api/team/members/a%2Fb", method: "DELETE" });
+  });
+
+  it("updates the profile with PATCH and starts Google with a return address", async () => {
+    const { calls, fetchImpl } = fakeFetch(() => json({ url: "https://accounts.google.com/o/oauth2/v2/auth?x=1" }));
+    await api(fetchImpl).updateMe({ name: "Anna" });
+    expect(calls[0]).toMatchObject({ url: "http://go:8080/api/me", method: "PATCH" });
+    expect(await api(fetchImpl).startGoogle("http://localhost:3000/auth/callback?next=%2F", "inv")).toMatch(/^https:\/\/accounts\.google\.com\//);
+    expect(JSON.parse(calls[1].body!)).toEqual({ return_to: "http://localhost:3000/auth/callback?next=%2F", invite: "inv" });
+  });
+
+  it("reports a signed-out 401 with the backend's code", async () => {
+    const { fetchImpl } = fakeFetch(() => json({ error: { code: "signed_out", message: "Sign in to continue." } }, 401));
+    await expect(api(fetchImpl).getTeam()).rejects.toMatchObject({ status: 401, code: "signed_out" });
+  });
+});

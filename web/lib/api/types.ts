@@ -15,6 +15,41 @@ export type Tone = "polite" | "firm" | "final";
 
 export type User = { id: string; email: string; name: string; role: string };
 
+// The signed-in user as the account and team pages show them. role "admin" is the owner.
+export type Account = User & {
+  has_password: boolean;
+  google_linked: boolean;
+  google_email?: string;
+  created_at: string;
+  last_login_at: string | null;
+};
+
+// GET /api/auth/status. mode "dev": every request is the owner, there is no sign-in.
+export type AuthStatus = { mode: "dev" | "accounts"; needs_setup: boolean; google: boolean; user: Account | null };
+
+// What signing in returns: the session token is for the web app's own cookie.
+export type SignedIn = { user: Account; token: string };
+
+export type InviteInfo = { email: string; name?: string; company: string; invited_by?: string; expires_at: string };
+
+export type Member = Account & { you: boolean };
+
+export type Invite = {
+  id: string;
+  email: string;
+  name?: string;
+  role: string;
+  invited_by?: string;
+  created_at: string;
+  expires_at: string;
+  expired: boolean;
+  email_message_id?: string;
+  email_status?: "queued" | "sent" | "failed" | "cancelled";
+  email_error?: string;
+};
+
+export type Team = { members: Member[]; invites: Invite[] };
+
 export type Invoice = {
   id: string;
   number: string;

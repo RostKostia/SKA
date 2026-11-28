@@ -379,3 +379,14 @@ textarea.field { resize: vertical; min-height: 5rem; }
     scroll-behavior: auto !important;
   }
 }
+
+/* Sign-in, sign-up and the account page. */
+.auth { min-height: 100vh; display: grid; justify-items: center; align-content: start; gap: 1.5rem; padding: 3rem 1rem; }
+.auth__brand { font-size: 1.6rem; }
+.auth__card { width: min(26rem, 100%); }
+.auth__wide { width: 100%; }
+.auth__label { gap: 0.35rem; font-weight: 500; }
+.auth__hint { font-size: 0.85rem; font-weight: 400; }
+.auth__or { text-align: center; margin: 0; }
+.account__section { max-width: 36rem; }
+.shell__user { color: inherit; font-weight: 500; }

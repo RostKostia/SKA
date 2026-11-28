@@ -195,14 +195,16 @@ func (a *App) skipOneDay(ctx context.Context) (DayReport, error) {
 	return rep, err
 }
 
+// Accounts (users, sessions, Google tokens, invitations) are kept, so a reset doesn't sign
+// everyone out. Only the business's data goes.
 const resetSQL = `TRUNCATE audit_log, chat_messages, outbound_messages, payment_initiations, payments, bank_transactions,
 	cashflows, balance_snapshots, bank_accounts, bank_connections, financing_offer_invoices, invoice_lines, invoices,
 	financing_offers, forecast_runs, budgets, invoice_counters, counterparties, message_templates, reminder_policies,
-	sessions, google_tokens, users, company RESTART IDENTITY CASCADE;
+	company RESTART IDENTITY CASCADE;
 `
 
-// ResetDemo empties every table and loads the sample data again (db/seed/sample.sql), in one
-// transaction. For rehearsals: the demo always starts from the same story.
+// ResetDemo empties the business's tables and loads the sample data again (db/seed/sample.sql),
+// in one transaction. For rehearsals: the demo always starts from the same story.
 func (a *App) ResetDemo(ctx context.Context) error {
 	if !a.Demo {
 		return forbidden("demo_off", "reset is only available with KERDOS_DEMO=1")

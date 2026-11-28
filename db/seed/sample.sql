@@ -12,8 +12,11 @@
 INSERT INTO company (name, email, iban, vat_registered, payment_terms_days)
 VALUES ('Nicosia Studio', 'owner@example.com', 'CY00 0000 0000 0000 0000 0000 0000', false, 14);
 
-INSERT INTO users (google_sub, email, name, role)
-VALUES ('sample-admin', 'owner@example.com', 'Studio Owner', 'admin');
+-- A placeholder owner with no way to sign in yet. With KERDOS_AUTH=accounts the first account
+-- created takes over this row. Demo reset keeps accounts, so this only runs on an empty table.
+INSERT INTO users (email, name, role)
+SELECT 'owner@example.com', 'Studio Owner', 'admin'
+WHERE NOT EXISTS (SELECT 1 FROM users);
 
 -- Reminders: first overdue reminder 3 days after the due date, then every 3 days,
 -- polite → firm → final. No nudges before the due date in the demo (add e.g. '{3}' for one).

@@ -247,3 +247,17 @@ body.busy #chat-form { opacity: 0.7; }
 #view-error a { color: var(--teal-deep); font-weight: 600; }
 .bad-line { color: var(--alert); }
 .paper li.bad-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* sign-in (KERDOS_AUTH=accounts) */
+.auth-screen { min-height: 100vh; display: grid; justify-items: center; align-content: start; gap: 24px; padding: 64px 16px; }
+.auth-card { width: min(420px, 100%); display: grid; gap: 16px; padding: 28px; background: var(--white); border: 1px solid var(--line); border-radius: 14px; }
+.auth-card form { display: grid; gap: 12px; }
+.auth-card label { display: grid; gap: 4px; font-weight: 600; }
+.auth-card input { font: inherit; min-height: 44px; padding: 8px 12px; border: 1.5px solid var(--edge); border-radius: 8px; }
+.auth-card input[readonly] { background: var(--salt); }
+.auth-card .btn { width: 100%; text-align: center; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+.auth-or { text-align: center; color: var(--ink-soft); }
+.auth-note { padding: 10px 14px; border-radius: 10px; background: var(--alert-bg); border: 1px solid #e9b9a6; color: #7d2c11; font-weight: 600; }
+.auth-link { background: none; border: 0; padding: 0; color: var(--teal-deep); text-decoration: underline; font-weight: 600; }
+#user-name { font-weight: 600; }
+.auth-screen .wordmark { color: var(--ink); }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ApiError } from "@/lib/api/client";
 
 export function ErrorPanel({ error }: { error: ApiError }) {
@@ -19,8 +20,9 @@ export function ErrorPanel({ error }: { error: ApiError }) {
 }
 
 // For a server component's catch block: a panel for backend errors; anything else is a bug and
-// is rethrown.
+// is rethrown. Signed out (401) goes to the sign-in page.
 export function apiErrorView(error: unknown) {
   if (!(error instanceof ApiError)) throw error;
+  if (error.status === 401) redirect("/signin");
   return <ErrorPanel error={error} />;
 }

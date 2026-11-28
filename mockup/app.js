@@ -61,6 +61,8 @@
   let fatal = null;
   let noticeTimer = null;
   let lastAnnounced = null;
+  let auth = null; // GET /api/auth/status: mode "dev" (no sign-in) or "accounts"
+  let authNote = ""; // a sign-in problem to show on the sign-in screen
 
   const cardOf = (m) => (m && m.card && typeof m.card === "object" ? m.card : null);
   const problem = (err) => {
@@ -112,6 +114,7 @@
       await load();
       fatal = null;
     } catch (e) {
+      if (e.status === 401) return showAuth();
       fatal = e;
     }
     render();
@@ -133,8 +136,13 @@
     try {
       await fn();
     } catch (e) {
+      if (e.status === 401) {
+        busy = false;
+        document.body.classList.remove("busy");
+        return showAuth();
+      }
       if (e.status >= 500 || !e.status) fatal = e;
-      else notify(e.message.charAt(0).toUpperCase() + e.message.slice(1) + ".", true);
+      else notify(e.message.charAt(0).toUpperCase() + e.message.slice(1).replace(/\.$/, "") + ".", true);
     } finally {
       busy = false;
       document.body.classList.remove("busy");
@@ -538,5 +546,141 @@
     showView("client");
   });
 
-  refresh();
+  // ---------- signing in (only when the API runs with KERDOS_AUTH=accounts) ----------
+  const googleHref = (invite) => {
+    const q = new URLSearchParams({ return_to: location.origin + location.pathname });
+    if (invite) q.set("invite", invite);
+    return "/api/auth/google/start?" + q;
+  };
+
+  // mode: "signin", or "signup" (the first account, or an invitation).
+  async function showAuth(mode, invite) {
+    $("#app").hidden = true;
+    const box = $("#auth");
+    box.hidden = false;
+    try {
+      auth = await api("GET", "/api/auth/status");
+    } catch (e) {
+      box.innerHTML = `<div class="auth-card"><h1>Can't reach the Kerdos API</h1><p class="muted">${esc(e.message)}</p></div>`;
+      return;
+    }
+    if (auth.mode !== "accounts" || auth.user) return enterApp();
+    let info = null;
+    if (invite) {
+      try {
+        info = await api("GET", "/api/auth/invites/" + encodeURIComponent(invite));
+      } catch (e) {
+        authNote = e.message;
+        invite = "";
+      }
+    }
+    if (!mode) mode = info || auth.needs_setup ? "signup" : "signin";
+    if (mode === "signup" && !info && !auth.needs_setup) mode = "signin";
+    const note = authNote ? `<p class="auth-note" role="alert">${esc(authNote)}</p>` : "";
+    authNote = "";
+    const google = auth.google ? `<a class="btn" href="${esc(googleHref(invite))}">Continue with Google</a><p class="auth-or">or ${mode === "signup" ? "choose a password" : "with your email"}</p>` : "";
+    let head, form, foot;
+    if (mode === "signup") {
+      head = info
+        ? `<h1>Join ${esc(info.company)}</h1><p class="muted">${esc(info.invited_by || "The owner")} invited you. The invitation is for ${esc(info.email)}.</p>`
+        : `<h1>Create the owner account</h1><p class="muted">You're the first one here, so this account owns the business.</p>`;
+      form = `<form id="auth-form" data-mode="signup">
+          <input type="hidden" name="invite" value="${esc(invite || "")}">
+          <label>Your name<input name="name" autocomplete="name" required maxlength="100" value="${esc((info && info.name) || "")}"></label>
+          <label>Email<input name="email" type="email" autocomplete="email" required ${info ? `readonly value="${esc(info.email)}"` : ""}></label>
+          <label>Password<input name="password" type="password" autocomplete="new-password" required minlength="8"></label>
+          <button type="submit" class="btn primary">Create account</button>
+        </form>`;
+      foot = `<p class="muted">Already have an account? <button type="button" class="auth-link" data-auth="signin">Sign in</button></p>`;
+    } else {
+      head = `<h1>Sign in</h1>`;
+      form = `<form id="auth-form" data-mode="signin">
+          <label>Email<input name="email" type="email" autocomplete="email" required></label>
+          <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+          <button type="submit" class="btn primary">Sign in</button>
+        </form>`;
+      foot = auth.needs_setup
+        ? `<p>Nobody has an account yet. <button type="button" class="auth-link" data-auth="signup">Create the owner account</button></p>`
+        : `<p class="muted">New here? Ask the owner of the business to invite you.</p>`;
+    }
+    box.innerHTML = `<div class="brand"><span class="mark" aria-hidden="true">κ</span><span class="wordmark">Kerdos</span></div>
+      <div class="auth-card">${head}${note}${google}${form}${foot}</div>`;
+    const first = box.querySelector("input:not([type=hidden]):not([readonly])");
+    if (first) first.focus();
+  }
+
+  $("#auth").addEventListener("click", (e) => {
+    const el = e.target.closest("[data-auth]");
+    if (el) showAuth(el.dataset.auth);
+  });
+
+  $("#auth").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const f = Object.fromEntries(new FormData(form));
+    const button = form.querySelector("button[type=submit]");
+    button.disabled = true;
+    try {
+      if (form.dataset.mode === "signup") await api("POST", "/api/auth/signup", f);
+      else await api("POST", "/api/auth/login", { email: f.email, password: f.password });
+      await enterApp();
+    } catch (err) {
+      authNote = err.message;
+      await showAuth(form.dataset.mode, f.invite);
+      const email = $("#auth input[name=email]");
+      if (email && !email.readOnly) email.value = f.email || "";
+    }
+  });
+
+  async function enterApp() {
+    $("#auth").hidden = true;
+    $("#app").hidden = false;
+    try {
+      auth = await api("GET", "/api/auth/status");
+    } catch (_) {
+      /* refresh() below shows the error */
+    }
+    const signedIn = auth && auth.mode === "accounts" && auth.user;
+    $("#user-name").hidden = !signedIn;
+    $("#user-name").textContent = signedIn ? auth.user.name : "";
+    $("#btn-sign-out").hidden = !signedIn;
+    await refresh();
+  }
+
+  $("#btn-sign-out").addEventListener("click", async () => {
+    try {
+      await api("POST", "/api/auth/logout");
+    } catch (_) {
+      /* signed out here anyway */
+    }
+    s.offers = {};
+    showAuth("signin");
+  });
+
+  // Coming back from Google: ?login_code=… signs in; ?auth_message=… is a problem to show.
+  async function start() {
+    const q = new URLSearchParams(location.search);
+    const code = q.get("login_code");
+    const invite = q.get("invite") || "";
+    if (q.get("auth_message")) authNote = q.get("auth_message");
+    if (code || q.has("auth_error")) history.replaceState(null, "", location.pathname);
+    if (code) {
+      try {
+        await api("POST", "/api/auth/exchange", { code });
+      } catch (e) {
+        authNote = e.message;
+      }
+    }
+    try {
+      auth = await api("GET", "/api/auth/status");
+    } catch (e) {
+      fatal = e;
+      render();
+      return;
+    }
+    if (auth.mode === "accounts" && (!auth.user || invite)) return showAuth(undefined, invite);
+    await enterApp();
+  }
+
+  start();
 })();

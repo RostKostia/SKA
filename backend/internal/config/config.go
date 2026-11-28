@@ -17,7 +17,7 @@ type Config struct {
 	Demo        bool   // KERDOS_DEMO=1 enables /api/demo/* (skip time, reset)
 	SeedFile    string // KERDOS_SEED_FILE, default ../db/seed/sample.sql
 	MockupDir   string // KERDOS_MOCKUP_DIR, default ../mockup: served at /mockup/ when the folder exists. "off" disables it
-	AuthMode    string // KERDOS_AUTH: "dev" (default) signs every request in as the first admin
+	AuthMode    string // KERDOS_AUTH: "dev" (default) signs every request in as the first admin; "accounts" needs sign-in
 
 	WorkerInterval time.Duration // KERDOS_WORKER_INTERVAL, default 1m: reminder and email worker
 	FinancingFeeBP int64         // KERDOS_MOCK_FINANCING_FEE_BP, default 150 (1.5%): sample fee on simulated offers
@@ -37,6 +37,12 @@ type Config struct {
 	BoCClientID     string // BOC_CLIENT_ID
 	BoCClientSecret string // BOC_CLIENT_SECRET
 	BoCRedirectURI  string // BOC_REDIRECT_URI: must point at GET /api/bank/callback
+
+	GoogleClientID     string // GOOGLE_CLIENT_ID: empty means no "Continue with Google"
+	GoogleClientSecret string // GOOGLE_CLIENT_SECRET
+	GoogleRedirectURI  string // GOOGLE_REDIRECT_URI, default http://localhost:8080/api/auth/google/callback
+	GoogleAuthURL      string // GOOGLE_AUTH_URL: only for tests against a fake Google
+	GoogleTokenURL     string // GOOGLE_TOKEN_URL: only for tests against a fake Google
 }
 
 func Load() Config {
@@ -66,6 +72,12 @@ func Load() Config {
 		BoCClientID:      get("BOC_CLIENT_ID", ""),
 		BoCClientSecret:  get("BOC_CLIENT_SECRET", ""),
 		BoCRedirectURI:   get("BOC_REDIRECT_URI", ""),
+
+		GoogleClientID:     get("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret: get("GOOGLE_CLIENT_SECRET", ""),
+		GoogleRedirectURI:  get("GOOGLE_REDIRECT_URI", "http://localhost:8080/api/auth/google/callback"),
+		GoogleAuthURL:      get("GOOGLE_AUTH_URL", ""),
+		GoogleTokenURL:     get("GOOGLE_TOKEN_URL", ""),
 	}
 }
 

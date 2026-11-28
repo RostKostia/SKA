@@ -47,6 +47,10 @@ func scanMessage(s scanner) (Message, error) {
 		m.Sequence = &seq.Int64
 	}
 	m.SentAt = timePtr(sent)
+	if m.Kind == "invite" {
+		// The link in an invitation is a credential for the invitee only; the log doesn't show it.
+		m.Body = inviteLinkRe.ReplaceAllString(m.Body, "invite=…")
+	}
 	return m, err
 }
 
@@ -175,11 +179,11 @@ func (a *App) SendQueued(ctx context.Context) (int, error) {
 func (a *App) sendNext(ctx context.Context, messageID string) (string, error) {
 	status := ""
 	err := a.tx(ctx, func(tx *sql.Tx) error {
-		var id, kind, invoiceID, to, subject, body string
-		err := tx.QueryRowContext(ctx, `SELECT id::text, kind, coalesce(invoice_id::text, ''), recipient, subject, body FROM outbound_messages
-			WHERE status = 'queued' AND scheduled_for <= now() AND ($1 = '' OR id::text = $1)
+		var id, kind, invoiceID, inviteID, to, subject, body string
+		err := tx.QueryRowContext(ctx, `SELECT id::text, kind, coalesce(invoice_id::text, ''), coalesce(invite_id::text, ''), recipient, subject, body
+			FROM outbound_messages WHERE status = 'queued' AND scheduled_for <= now() AND ($1 = '' OR id::text = $1)
 			ORDER BY scheduled_for, created_at LIMIT 1 FOR UPDATE SKIP LOCKED`, messageID).
-			Scan(&id, &kind, &invoiceID, &to, &subject, &body)
+			Scan(&id, &kind, &invoiceID, &inviteID, &to, &subject, &body)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -188,7 +192,7 @@ func (a *App) sendNext(ctx context.Context, messageID string) (string, error) {
 		}
 		// Check again right before sending: the invoice may have been cancelled, paid or financed
 		// since the email was queued (or the row may have been requeued by hand).
-		if reason, err := a.staleReason(ctx, tx, kind, invoiceID); err != nil {
+		if reason, err := a.staleReason(ctx, tx, kind, invoiceID, inviteID); err != nil {
 			return err
 		} else if reason != "" {
 			a.Log.Info("email dropped", "to", to, "kind", kind, "reason", reason)
@@ -211,8 +215,27 @@ func (a *App) sendNext(ctx context.Context, messageID string) (string, error) {
 	return status, err
 }
 
-// staleReason says why an email about an invoice must not go out any more, or "" if it may.
-func (a *App) staleReason(ctx context.Context, q querier, kind, invoiceID string) (string, error) {
+// staleReason says why an email about an invoice (or an invitation) must not go out any more,
+// or "" if it may.
+func (a *App) staleReason(ctx context.Context, q querier, kind, invoiceID, inviteID string) (string, error) {
+	if kind == "invite" {
+		var accepted, revoked, expired bool
+		err := q.QueryRowContext(ctx, `SELECT accepted_at IS NOT NULL, revoked_at IS NOT NULL, expires_at <= now() FROM invites WHERE id = $1`,
+			nullable(inviteID)).Scan(&accepted, &revoked, &expired)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return "the invitation no longer exists", nil
+		case err != nil:
+			return "", err
+		case accepted:
+			return "the invitation was already accepted", nil
+		case revoked:
+			return "the invitation was cancelled", nil
+		case expired:
+			return "the invitation expired", nil
+		}
+		return "", nil
+	}
 	if invoiceID == "" {
 		return "", nil
 	}

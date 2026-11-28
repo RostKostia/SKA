@@ -24,7 +24,7 @@ An AI assistant for small businesses, built on Claude and integrated with Jinius
 
 ### Features added after the first brief
 From the Kerdos feature request. The ones the backend does not serve yet are listed in `web/README.md`.
-- **Google sign-in** (OAuth 2.0 / OpenID Connect). The backend holds all tokens; the browser only gets a session cookie. Only the `owner` role exists for now.
+- **Sign-in with email and password, or Google** (OAuth 2.0 / OpenID Connect). The backend holds all tokens; the browser only gets a session cookie. Roles: the owner (the first account) and members the owner invites.
 - **Invoices page with two directions:** "To the company" (payable, from suppliers) and "From the company" (receivable). Search, filter, sort.
 - **Google Sheets sync and export** (CSV/XLSX, "Open in Google Sheets"). Only the CSV export exists so far.
 - **Gmail reminders, manual and automated:** editable templates with placeholders such as `{client_name}`, `{invoice_number}`, `{amount}`, `{due_date}`; optional Claude draft that the owner approves; every send logged, no duplicate sends.
@@ -34,19 +34,21 @@ From the Kerdos feature request. The ones the backend does not serve yet are lis
 Working end to end on the Go backend, in both the web app (`web/`) and the mockup (served at `/mockup/`):
 - Chat invoicing, automatic and manual reminders, debtors, the cash forecast, "Get €800 now", and the demo controls (Skip time, Reset). The client's pay page with "Pay now" is in the mockup and the API, not yet in the web app.
 - **Email:** real over SMTP, tested with Gmail and an app password. Chat and the mockup say an email went out only once the mail server accepted it; a failed one says why and has a Retry button. Nothing is emailed about a cancelled invoice, and paid or financed invoices are never chased.
+- **Accounts:** sign in with email and password or Google (`KERDOS_AUTH=accounts`). The first account owns the business and invites the others by email; account page (profile, password, Google link, sign out everywhere) and team page (invite, cancel, remove). In the web app and the mockup. The default, `KERDOS_AUTH=dev`, has no sign-in, for the demo and tests.
 - **Claude** reads chat messages when `ANTHROPIC_API_KEY` is set. Otherwise, or on any failure, the rule-based parser does.
 - **BoC open banking:** consent, accounts, balance and statement (the Accounts API) are built, and an incoming payment that mentions an invoice number marks that invoice paid. So far this is tested only against the sample responses in the BoC documentation. It has not been run against the live sandbox yet.
 
 Simulated: Jinius delivery (no public docs), "Pay now" (the BoC Payments API isn't built yet), and financing offers and payout (BoC has no lending API).
 
-Not built: Google sign-in, Google Sheets sync, XLSX export (the web app exports CSV), budgets and the category forecast, editing reminder templates, Claude-drafted reminders, and a bank connection page in the web app.
+Not built: Google Sheets sync, XLSX export (the web app exports CSV), budgets and the category forecast, editing reminder templates, Claude-drafted reminders, and a bank connection page in the web app.
 
 Details: the Status table in `README.md`, and `web/README.md` for the web app.
 
 ### Open items
 - Run the BoC connection against the live sandbox from a team laptop (steps in `backend/README.md`).
-- Google Sheets: the proposal for the demo is a service account that writes to one shared spreadsheet. Giving each user their own sheet needs Google sign-in first. Not decided yet.
+- Google Sheets: the proposal for the demo is a service account that writes to one shared spreadsheet. Giving each user their own sheet would also ask them for Sheets access, on top of Google sign-in. Not decided yet.
 - Confirm Jinius access with the organisers.
+- Google sign-in needs a Google OAuth client (ID and secret in `.env`); steps in `backend/README.md`. Decide whether the demo runs with sign-in on.
 
 ### Architecture
 - **Frontend:** Next.js (App Router, TypeScript) in `web/`. It only displays data and proxies to the backend. Every outside service sits behind a mock in the backend, so the demo never depends on a service being up.

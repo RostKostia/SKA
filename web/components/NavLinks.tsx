@@ -12,11 +12,13 @@ const ITEMS = [
   { href: "/reminders", label: "Reminders" },
 ];
 
-export function NavLinks() {
+// owner adds the Team page, which only the owner can open.
+export function NavLinks({ owner = false }: { owner?: boolean }) {
   const pathname = usePathname();
+  const items = [...ITEMS, ...(owner ? [{ href: "/team", label: "Team" }] : []), { href: "/account", label: "Account" }];
   return (
     <ul>
-      {ITEMS.map(({ href, label }) => {
+      {items.map(({ href, label }) => {
         const current = href === "/" ? pathname === "/" : pathname.startsWith(href);
         return (
           <li key={href}>
