@@ -37,20 +37,20 @@ Read at a calm pace, about 130 words a minute. Brackets are stage directions, no
 
 ### 4. Live demo (1:30), Artem
 
-[Before: `KERDOS_BANK=mock`, demo data reset, Kostas pointed at the second phone. See the checklist in [project-description.md](../project-description.md#the-2-minute-demo).]
+[Before: `KERDOS_BANK=mock`, demo data reset with `POST /api/demo/reset` (there is no button for it), Kostas's email pointed at the second phone. See the checklist in [project-description.md](../project-description.md#the-2-minute-demo). The app has no Skip time button and no pay page, so the demo doesn't show either.]
 
 1. **Chat (0:20).** [Type "Invoice Kostas €120".]
    > I just type, like I would text a friend: "Invoice Kostas, 120 euros." Claude reads it, finds Kostas in my clients and fills in the invoice.
 2. **Invoice emailed (0:20).** [Show the second phone receiving the email.]
-   > And here it is, already in Kostas's inbox, on this phone, with a "Pay now" link. No PDF to attach, no email to write.
-3. **Automatic reminders (0:25).** [Press Skip time; show the reminder going out and the reminder history.]
-   > Now let's jump forward a few days. Another client, Andreas, is late. I didn't do anything: Kerdos sent him a reminder on its own, and each one gets a little firmer. I always see who owes me what.
-4. **Client pays (0:15).** [On the second phone, open the link and pay.]
-   > Kostas opens the link and pays in two taps.
-5. **Paid (0:10).** [Back on the dashboard: the invoice turns Paid, the reminders stop.]
-   > The invoice is marked paid, the reminders stop, and the money is in my account. That's it.
+   > And here it is, already in Kostas's inbox, on this phone, with a payment link. No PDF to attach, no email to write.
+3. **Remind now (0:20).** [Debtors or Invoices page: press Remind now on Andreas's overdue invoice.]
+   > Andreas is late. One tap, and a polite reminder is already on its way. The next ones get firmer.
+4. **Reminders page (0:15).** [Open Reminders.]
+   > Kerdos does this on its own every day: here is every email it sent and the rules it follows.
+5. **Debtors (0:15).** [Open Debtors.]
+   > And I always see who owes me what, and how late they are. That's it.
 
-Do not show the "Get money now" financing button: financing is not part of the pitch.
+Do not open the Forecast page on stage: it still shows the old "Get €800 now" financing button, and financing is not part of the pitch.
 
 ### 5. Integrations (0:20), Artem
 
